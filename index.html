@@ -11,7 +11,9 @@
   #app{display:flex;flex-direction:column;align-items:center;height:100vh;height:100dvh;padding:8px;gap:8px}
   header{display:flex;justify-content:space-between;width:100%;max-width:560px;padding:0 6px}
   .stat{display:flex;flex-direction:column;font-size:11px;letter-spacing:2px;color:#8fa3c8}
-  .stat b{font-size:22px;font-weight:800;color:#fff;letter-spacing:0;font-variant-numeric:tabular-nums}
+  .stat b{font-size:22px;font-weight:800;color:#fff;letter-spacing:0;font-variant-numeric:tabular-nums;line-height:1.1}
+  #dirs{font-size:15px;letter-spacing:5px;color:#3d4a68;margin-top:3px;line-height:1;font-weight:700}
+  #dirs span.on{color:#7cc0ff}
   #stage{position:relative}
   canvas{display:block;border-radius:16px;background:linear-gradient(160deg,#141a33,#0d1226);
     box-shadow:0 12px 40px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.05)}
@@ -50,7 +52,9 @@
 <div id="app">
   <header>
     <div class="stat">СЧЁТ<b id="score">0</b></div>
-    <div class="stat" style="align-items:flex-end">УРОВЕНЬ<b id="level">1</b></div>
+    <div class="stat" style="align-items:flex-end">УРОВЕНЬ<b id="level">1</b>
+      <div id="dirs"></div>
+    </div>
   </header>
   <div id="stage">
     <canvas id="board"></canvas>
@@ -61,10 +65,10 @@
   <div id="controls">
     <div class="grp">
       <button class="key" data-act="left">←</button>
-      <button class="key" data-act="down">↓</button>
+      <button class="key" data-act="right">→</button>
     </div>
     <div class="grp">
-      <button class="key" data-act="right">→</button>
+      <button class="key" data-act="down">↓</button>
       <button class="key go" data-act="go">GO</button>
     </div>
   </div>
@@ -78,14 +82,14 @@
    ============================================================ */
 
 const CONFIG = {
-  N: 13,
-  SPAWN_COL: 6,
+  N: 11,                       // ← поле 11×11
+  SPAWN_COL: 5,                // центральная колонка (0-based)
   BASE_INTERVAL: 1440,
-  SPEED_FACTOR: 1.2,
-  MIN_WORD_LEN: 3,
+  SPE.filterED_FACTOR: 1.(function2,
+  MIN_WORD_LEN: (ch3,
   SCORE_MULT: 10,
-  MAX_SCORE: 1000000,
-  COMBO: { 1:1, 2:1.2, 3:1.5, 4:2, 5:3 },
+){  MAX_SCORE: 100 return0000,
+ !  COMBO: { 1:1, 2:1.2, 3:1.5, 4:2, 5:3 },
   LEVEL_THRESHOLDS: [0, 1000, 3000, 7000, 15000, 30000, 55000, 95000,
                      160000, 260000, 400000, 550000, 700000, 820000, 920000, 990000],
   DIR_GROUPS: [
@@ -104,55 +108,69 @@ const CONFIG = {
 };
 
 /* ---------- Словарь ---------- */
-const DICT_RAW = (window.LONIKA_DICT || []).filter(w =>
-  typeof w === 'string' && /^[А-ЯЁа-яё]+$/.test(w) && w.length >= CONFIG.MIN_WORD_LEN
-);
+const DICT_RAW = (window.LONIKA_DICT || []).filter(function(w){
+  return typeof w === 'string' && /^[А-ЯЁа-яё]+$/.test(w) && w.length >= CONFIG.MIN_WORD_LEN;
+});
 if (!DICT_RAW.length){
   console.error('Словарь не загружен. Проверь dictionary.js рядом с index.html');
 }
 
 /* ---------- Trie ---------- */
-class Trie {
-  constructor(){ this.root = Object.create(null); }
-  insert(w){
-    let n = this.root;
-    for (const ch of w){ n = n[ch] || (n[ch] = Object.create(null)); }
-    n.$ = 1;
-  }
-  has(w){
-    let n = this.root;
-    for (const ch of w){ if (!(n = n[ch])) return false; }
-    return !!n.$;
-  }
-  hasPrefix(p){
-    let n = this.root;
-    for (const ch of p){ if (!(n = n[ch])) return false; }
-    return true;
-  }
-}
+function Trie(){ this.root = Object.create(null); }
+Trie.prototype.insert = function(w){
+  let n = this.root;
+  for (const ch of w){ n = n[ch] || (n[ch] = Object.create(null)); }
+  n.$ = 1;
+};
+Trie.prototype.has = function(w){
+  let n = this.root;
+  for (const ch of w){ if (!(n = n[ch])) return false; }
+  return !!n.$;
+};
+Trie.prototype.hasPrefix = function(p){
+  let n = this.root;
+  for (const ch of p){ if (!(n = n[ch])) return false; }
+  return true;
+};
 const trie = new Trie();
 for (const w of DICT_RAW) trie.insert(w.toUpperCase());
 
-/* ---------- Генератор букв ---------- */
-const LETTERS = Object.keys(CONFIG.LETTER_WEIGHTS);
-const LETTER_TOTAL = LETTERS.reduce((s,k)=>s+CONFIG.LETTER_WEIGHTS[k],0);
+/* ---------- Генератор букв с чередованием гласная/согласная ---------- */
+const ALL_LETTERS = Object.keys(CONFIG.LETTER_WEIGHTS);
+// Гласные: а е ё и о у ы э ю я
+const VOWELS_SET = { 'а':1,'е':1,'ё':1,'и':1,'о':1,'у':1,'ы':1,'э':1,'ю':1,'я':1 };
+const VOWEL_LIST     = ALL_LETTERS.filter(function(ch){ return  VOWELS_SET[ch]; });
+const CONSONANT_LIST = ALL_LETTERSVOWELS_SET[ch]; });
+const VOWEL_TOTAL     = VOWEL_LIST.reduce(function(s,ch){ return s + CONFIG.LETTER_WEIGHTS[ch]; }, 0);
+const CONSONANT_TOTAL = CONSONANT_LIST.reduce(function(s,ch){ return s + CONFIG.LETTER_WEIGHTS[ch]; }, 0);
+
+let lastType = null;  // 'v' — гласная, 'c' — согласная
 function randomLetter(){
-  let r = Math.random() * LETTER_TOTAL;
-  for (const ch of LETTERS){ r -= CONFIG.LETTER_WEIGHTS[ch]; if (r <= 0) return ch.toUpperCase(); }
-  return 'О';
+  let list, total;
+  if (lastType === 'v'){ list = CONSONANT_LIST; total = CONSONANT_TOTAL; lastType = 'c'; }
+  else                 { list = VOWEL_LIST;     total = VOWEL_TOTAL;     lastType = 'v'; }
+  let r = Math.random() * total;
+  for (let i=0;i<list.length;i++){
+    r -= CONFIG.LETTER_WEIGHTS[list[i]];
+    if (r <= 0) return list[i].toUpperCase();
+  }
+  return list[0].toUpperCase();
 }
 
 /* ---------- Поле ---------- */
 const N = CONFIG.N;
 let board = [];
 let nextCellId = 1;
-function newBoard(){ board = Array.from({length:N},()=>Array(N).fill(null)); }
+function newBoard(){ board = Array.from({length:N},function(){ return Array(N).fill(null); }); }
 function canPlace(r,c){ return r>=0 && r<N && c>=0 && c<N && !board[r][c]; }
 function canMoveTo(c,r){ return r<N && canPlace(r,c); }
 
 /* ---------- Поиск слов ---------- */
 function getDirs(level){
-  for (const g of CONFIG.DIR_GROUPS) if (level <= g.max) return g.dirs;
+  for (let i=0;i<CONFIG.DIR_GROUPS.length;i++){
+    const g = CONFIG.DIR_GROUPS[i];
+    if (level <= g.max) return g.dirs;
+  }
   return ['right'];
 }
 function getDirVectors(level){
@@ -164,38 +182,26 @@ function getDirVectors(level){
   if (d.indexOf('up')    >= 0) v.push([-1,0]);
   return v;
 }
-
-// Находит ВСЕ допустимые слова на поле в разрешённых направлениях.
-// Слово начинается только в клетке, перед которой пусто/край —
-// так одно и то же слово не находится несколько раз с разных концов.
 function findWords(level){
   const vecs = getDirVectors(level);
   const result = [];
   const seen = Object.create(null);
-
   for (let r=0;r<N;r++){
     for (let c=0;c<N;c++){
       if (!board[r][c]) continue;
       for (let vi=0; vi<vecs.length; vi++){
         const dr = vecs[vi][0], dc = vecs[vi][1];
-
-        // предыдущая клетка (откуда «пришли») должна быть пустой/край
         const pr = r - dr, pc = c - dc;
         if (pr >= 0 && pr < N && pc >= 0 && pc < N && board[pr][pc]) continue;
-
         let word = '';
         const cells = [];
         let rr = r, cc = c;
         while (rr >= 0 && rr < N && cc >= 0 && cc < N && board[rr][cc]){
           word += board[rr][cc].letter;
           cells.push([rr, cc]);
-
           if (word.length >= CONFIG.MIN_WORD_LEN && trie.has(word)){
             const key = cells[0][0] + ',' + cells[0][1] + '|' + word;
-            if (!seen[key]){
-              seen[key] = 1;
-              result.push({ word: word, cells: cells.slice() });
-            }
+            if (!seen[key]){ seen[key] = 1; result.push({ word: word, cells: cells.slice() }); }
           }
           if (!trie.hasPrefix(word)) break;
           rr += dr; cc += dc;
@@ -246,10 +252,7 @@ const Audio8 = (function(){
   function unlock(){
     if (unlocked) return;
     unlocked = true;
-    try{
-      const a = ac();
-      if (a.state === 'suspended' && a.resume) a.resume();
-    }catch(e){}
+    try{ const a = ac(); if (a.state === 'suspended' && a.resume) a.resume(); }catch(e){}
   }
   ['pointerdown','touchstart','keydown'].forEach(function(ev){
     window.addEventListener(ev, unlock, { once:true, passive:true });
@@ -280,7 +283,7 @@ const Audio8 = (function(){
   };
 })();
 
-/* ---------- Состояние игры ---------- */
+/* ---------- Состояние ---------- */
 const G = {
   state: 'READY',
   score: 0,
@@ -313,7 +316,7 @@ function resize(){
   canvas.width  = Math.round(boardPx * dpr);
   canvas.height = Math.round(boardPx * dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  cellSize = boardPx / N;
+  cellSize = boardPx / N;   // ← N=11 → ячейки крупнее
 }
 window.addEventListener('resize', resize);
 
@@ -326,7 +329,6 @@ function roundRect(x,y,w,h,r){
   ctx.arcTo(x,y,x+w,y,r);
   ctx.closePath();
 }
-
 function drawCell(x,y,letter,opts){
   opts = opts || {};
   const pad = cellSize*0.06;
@@ -372,21 +374,16 @@ function render(){
     ctx.beginPath(); ctx.moveTo(i*cellSize,0); ctx.lineTo(i*cellSize,boardPx); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0,i*cellSize); ctx.lineTo(boardPx,i*cellSize); ctx.stroke();
   }
-  // (подсветка центральной колонки УБРАНА — это была моя фича, выглядела как баг)
-
   const hl = Object.create(null);
   for (let i=0;i<G.highlight.length;i++){
     const cells = G.highlight[i].cells;
     for (let j=0;j<cells.length;j++) hl[cells[j][0]*N + cells[j][1]] = 1;
   }
-
   const delSet = Object.create(null);
   const now = performance.now();
   if (G.phase && G.phase.type === 'delete'){
     const t = Math.min(1, (now - G.phase.start) / G.phase.dur);
-    for (let i=0;i<G.deleting.length;i++){
-      delSet[G.deleting[i].r*N + G.deleting[i].c] = t;
-    }
+    for (let i=0;i<G.deleting.length;i++) delSet[G.deleting[i].r*N + G.deleting[i].c] = t;
   }
   const fallMap = Object.create(null);
   if (G.phase && G.phase.type === 'fall'){
@@ -427,14 +424,28 @@ function render(){
 const el = {
   score: document.getElementById('score'),
   level: document.getElementById('level'),
+  dirs: document.getElementById('dirs'),
   pv0: document.getElementById('pv0'),
   pv1: document.getElementById('pv1'),
   overlay: document.getElementById('overlay'),
   toast: document.getElementById('toast'),
 };
+const DIR_SYMBOL = { left:'←', right:'→', up:'↑', down:'↓' };
+const DIR_ORDER  = ['left','right','up','down'];
+function updateDirs(){
+  const active = getDirs(G.level);
+  let html = '';
+  for (let i=0;i<DIR_ORDER.length;i++){
+    const d = DIR_ORDER[i];
+    const on = active.indexOf(d) >= 0 ? ' class="on"' : '';
+    html += '<span' + on + '>' + DIR_SYMBOL[d] + '</span>';
+  }
+  el.dirs.innerHTML = html;
+}
 function updateUI(){
   el.score.textContent = G.score.toLocaleString('ru-RU');
   el.level.textContent = G.level;
+  updateDirs();
 }
 function updatePreviews(){
   el.pv0.textContent = G.queue[0] || '·';
@@ -450,16 +461,16 @@ function toast(text, ms){
 function showOverlay(html){ el.overlay.innerHTML = html; el.overlay.classList.add('on'); }
 function hideOverlay(){ el.overlay.classList.remove('on'); el.overlay.innerHTML = ''; }
 
-// Клик по затемнению (не по кнопке) — снимает паузу
 el.overlay.addEventListener('pointerdown', function(e){
   if (e.target.closest('button')) return;
   if (G.state === 'PAUSED') togglePause();
 });
 
-/* ---------- Логика игры ---------- */
+/* ---------- Логика ---------- */
 function startGame(){
   newBoard();
   G.score = 0; G.level = 1; G.piece = null;
+  lastType = null;                                  // сбрасываем чередование
   G.queue = [randomLetter(), randomLetter()];
   G.highlight = []; G.busy = false; G.phase = null;
   G.deleting = []; G.fallMoves = [];
@@ -471,7 +482,7 @@ function startGame(){
 function spawnPiece(){
   if (board[0][CONFIG.SPAWN_COL]){ gameOver(); return; }
   const letter = G.queue.shift();
-  G.queue.push(randomLetter());
+  G.queue.push(randomLetter());                    // чередование продолжается
   updatePreviews();
   G.piece = { col: CONFIG.SPAWN_COL, row: 0, visualRow: 0, letter: letter, timer: 0 };
 }
