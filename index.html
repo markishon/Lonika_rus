@@ -30,7 +30,8 @@
   .key.go:active{box-shadow:0 1px 0 #a06f18,0 3px 8px rgba(0,0,0,.35)}
   @media (max-width:480px){.key{width:60px;height:60px}}
   #overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
-    background:rgba(8,12,26,.82);border-radius:16px;text-align:center;padding:24px;gap:14px;backdrop-filter:blur(6px)}
+    background:rgba(8,12,26,.82);border-radius:16px;text-align:center;padding:24px;gap:14px;backdrop-filter:blur(6px);
+    cursor:pointer}
   #overlay.on{display:flex}
   #overlay h1{margin:0;font-size:34px;letter-spacing:6px;background:linear-gradient(90deg,#7cc0ff,#c88bff,#ffb86b);
     -webkit-background-clip:text;background-clip:text;color:transparent}
@@ -69,13 +70,11 @@
   </div>
 </div>
 
-<!-- СЛОВАРЬ ПОДКЛЮЧАЕТСЯ ОТДЕЛЬНО — можно заменить файл, не трогая движок -->
 <script src="dictionary.js"></script>
 
 <script>
 /* ============================================================
-   ЛОНИКА — игровой движок
-   Словарь читается из window.LONIKA_DICT (файл dictionary.js)
+   ЛОНИКА — движок
    ============================================================ */
 
 const CONFIG = {
@@ -104,12 +103,12 @@ const CONFIG = {
   SOFT_DROP: 0.06,
 };
 
-/* ---------- DICTIONARY (внешний) ---------- */
+/* ---------- Словарь ---------- */
 const DICT_RAW = (window.LONIKA_DICT || []).filter(w =>
   typeof w === 'string' && /^[А-ЯЁа-яё]+$/.test(w) && w.length >= CONFIG.MIN_WORD_LEN
 );
 if (!DICT_RAW.length){
-  console.error('Словарь не загружен. Проверь, что dictionary.js лежит рядом с index.html');
+  console.error('Словарь не загружен. Проверь dictionary.js рядом с index.html');
 }
 
 /* ---------- Trie ---------- */
@@ -134,7 +133,7 @@ class Trie {
 const trie = new Trie();
 for (const w of DICT_RAW) trie.insert(w.toUpperCase());
 
-/* ---------- Letter Generator ---------- */
+/* ---------- Генератор букв ---------- */
 const LETTERS = Object.keys(CONFIG.LETTER_WEIGHTS);
 const LETTER_TOTAL = LETTERS.reduce((s,k)=>s+CONFIG.LETTER_WEIGHTS[k],0);
 function randomLetter(){
@@ -143,7 +142,7 @@ function randomLetter(){
   return 'О';
 }
 
-/* ---------- Board ---------- */
+/* ---------- Поле ---------- */
 const N = CONFIG.N;
 let board = [];
 let nextCellId = 1;
@@ -151,7 +150,7 @@ function newBoard(){ board = Array.from({length:N},()=>Array(N).fill(null)); }
 function canPlace(r,c){ return r>=0 && r<N && c>=0 && c<N && !board[r][c]; }
 function canMoveTo(c,r){ return r<N && canPlace(r,c); }
 
-/* ---------- Word Finder ---------- */
+/* ---------- Поиск слов ---------- */
 function getDirs(level){
   for (const g of CONFIG.DIR_GROUPS) if (level <= g.max) return g.dirs;
   return ['right'];
@@ -159,48 +158,69 @@ function getDirs(level){
 function getDirVectors(level){
   const v = [];
   const d = getDirs(level);
-  if (d.includes('right')) v.push([0, 1]);
-  if (d.includes('left'))  v.push([0,-1]);
-  if (d.includes('down'))  v.push([1, 0]);
-  if (d.includes('up'))    v.push([-1,0]);
+  if (d.indexOf('right') >= 0) v.push([0, 1]);
+  if (d.indexOf('left')  >= 0) v.push([0,-1]);
+  if (d.indexOf('down')  >= 0) v.push([1, 0]);
+  if (d.indexOf('up')    >= 0) v.push([-1,0]);
   return v;
 }
+
+// Находит ВСЕ допустимые слова на поле в разрешённых направлениях.
+// Слово начинается только в клетке, перед которой пусто/край —
+// так одно и то же слово не находится несколько раз с разных концов.
 function findWords(level){
   const vecs = getDirVectors(level);
-  const result = new Map();
+  const result = [];
+  const seen = Object.create(null);
+
   for (let r=0;r<N;r++){
     for (let c=0;c<N;c++){
       if (!board[r][c]) continue;
-      for (const [dr,dc] of vecs){
-        let word='', cells=[];
-        let rr=r, cc=c;
-        while (rr>=0 && rr<N && cc>=0 && cc<N && board[rr][cc]){
+      for (let vi=0; vi<vecs.length; vi++){
+        const dr = vecs[vi][0], dc = vecs[vi][1];
+
+        // предыдущая клетка (откуда «пришли») должна быть пустой/край
+        const pr = r - dr, pc = c - dc;
+        if (pr >= 0 && pr < N && pc >= 0 && pc < N && board[pr][pc]) continue;
+
+        let word = '';
+        const cells = [];
+        let rr = r, cc = c;
+        while (rr >= 0 && rr < N && cc >= 0 && cc < N && board[rr][cc]){
           word += board[rr][cc].letter;
-          cells.push([rr,cc]);
-          if (!trie.hasPrefix(word)) break;
+          cells.push([rr, cc]);
+
           if (word.length >= CONFIG.MIN_WORD_LEN && trie.has(word)){
-            const key = word + '|' + cells.map(([a,b])=>a+'-'+b).join(',');
-            if (!result.has(key)) result.set(key, { word, cells: cells.slice() });
+            const key = cells[0][0] + ',' + cells[0][1] + '|' + word;
+            if (!seen[key]){
+              seen[key] = 1;
+              result.push({ word: word, cells: cells.slice() });
+            }
           }
+          if (!trie.hasPrefix(word)) break;
           rr += dr; cc += dc;
         }
       }
     }
   }
-  return [...result.values()];
+  return result;
 }
 
-/* ---------- Scoring ---------- */
+/* ---------- Очки ---------- */
 function comboFor(n){
   if (n >= 5) return CONFIG.COMBO[5];
   return CONFIG.COMBO[n] || 1;
 }
 function scoreWords(words){
-  const sum = words.reduce((s,w)=> s + w.word.length*w.word.length*CONFIG.SCORE_MULT, 0);
+  let sum = 0;
+  for (let i=0;i<words.length;i++){
+    const len = words[i].word.length;
+    sum += len * len * CONFIG.SCORE_MULT;
+  }
   return Math.round(sum * comboFor(words.length));
 }
 
-/* ---------- Levels ---------- */
+/* ---------- Уровни ---------- */
 function levelForScore(s){
   let lv = 1;
   for (let i=0;i<CONFIG.LEVEL_THRESHOLDS.length;i++){
@@ -212,20 +232,40 @@ function fallInterval(level){
   return CONFIG.BASE_INTERVAL / Math.pow(CONFIG.SPEED_FACTOR, level-1);
 }
 
-/* ---------- Audio ---------- */
-const Audio8 = (()=>{
-  let ctx = null, enabled = true;
-  function ac(){ if(!ctx) ctx = new (window.AudioContext||window.webkitAudioContext)(); return ctx; }
-  function beep(freq, dur=0.08, type='square', vol=0.08){
-    if (!enabled) return;
+/* ---------- Звук (безопасный для Яндекс.Браузера) ---------- */
+const Audio8 = (function(){
+  let ctx = null, enabled = true, unlocked = false;
+  function ac(){
+    if (!ctx){
+      const C = window.AudioContext || window.webkitAudioContext;
+      if (!C) throw new Error('no audio');
+      ctx = new C();
+    }
+    return ctx;
+  }
+  function unlock(){
+    if (unlocked) return;
+    unlocked = true;
     try{
-      const a = ac(); const o = a.createOscillator(); const g = a.createGain();
-      o.type=type; o.frequency.value=freq; g.gain.value=vol;
+      const a = ac();
+      if (a.state === 'suspended' && a.resume) a.resume();
+    }catch(e){}
+  }
+  ['pointerdown','touchstart','keydown'].forEach(function(ev){
+    window.addEventListener(ev, unlock, { once:true, passive:true });
+  });
+  function beep(freq, dur, type, vol){
+    if (!enabled || !unlocked) return;
+    try{
+      const a = ac();
+      if (a.state === 'suspended' && a.resume) a.resume();
+      const o = a.createOscillator(); const g = a.createGain();
+      o.type = type || 'square'; o.frequency.value = freq; g.gain.value = vol || 0.08;
       o.connect(g); g.connect(a.destination);
       const t = a.currentTime;
-      g.gain.setValueAtTime(vol, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
-      o.start(t); o.stop(t+dur+0.02);
+      g.gain.setValueAtTime(vol || 0.08, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + (dur||0.08));
+      o.start(t); o.stop(t + (dur||0.08) + 0.02);
     }catch(e){}
   }
   return {
@@ -233,14 +273,14 @@ const Audio8 = (()=>{
     move(){ beep(440, 0.04, 'square', 0.04); },
     lock(){ beep(200, 0.08, 'triangle', 0.06); },
     go(){ beep(520, 0.09, 'square', 0.08); },
-    score(){ beep(880, 0.06, 'sine', 0.07); setTimeout(()=>beep(1180,0.07,'sine',0.07),60); },
-    levelup(){ [523,659,784,1046].forEach((f,i)=>setTimeout(()=>beep(f,0.1,'triangle',0.08), i*70)); },
-    gameover(){ [400,300,200,140].forEach((f,i)=>setTimeout(()=>beep(f,0.18,'sawtooth',0.07), i*130)); },
-    victory(){ [523,659,784,1046,1318].forEach((f,i)=>setTimeout(()=>beep(f,0.16,'sine',0.09), i*100)); },
+    score(){ beep(880, 0.06, 'sine', 0.07); setTimeout(function(){beep(1180,0.07,'sine',0.07);},60); },
+    levelup(){ [523,659,784,1046].forEach(function(f,i){ setTimeout(function(){beep(f,0.1,'triangle',0.08);}, i*70); }); },
+    gameover(){ [400,300,200,140].forEach(function(f,i){ setTimeout(function(){beep(f,0.18,'sawtooth',0.07);}, i*130); }); },
+    victory(){ [523,659,784,1046,1318].forEach(function(f,i){ setTimeout(function(){beep(f,0.16,'sine',0.09);}, i*100); }); },
   };
 })();
 
-/* ---------- Game State ---------- */
+/* ---------- Состояние игры ---------- */
 const G = {
   state: 'READY',
   score: 0,
@@ -254,7 +294,7 @@ const G = {
   deleting: [],
 };
 
-/* ---------- Rendering ---------- */
+/* ---------- Рендер ---------- */
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 let cellSize = 32, boardPx = 416;
@@ -287,7 +327,8 @@ function roundRect(x,y,w,h,r){
   ctx.closePath();
 }
 
-function drawCell(x,y,letter,opts={}){
+function drawCell(x,y,letter,opts){
+  opts = opts || {};
   const pad = cellSize*0.06;
   const s = cellSize - pad*2;
   const r = s*0.22;
@@ -315,7 +356,7 @@ function drawCell(x,y,letter,opts={}){
     ctx.shadowBlur = 0;
   }
   ctx.fillStyle = opts.highlight ? '#2a1a00' : '#ffffff';
-  ctx.font = `800 ${cellSize*0.52}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+  ctx.font = '800 ' + (cellSize*0.52) + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(letter, cellSize/2, cellSize/2 + 1);
   ctx.restore();
@@ -331,24 +372,29 @@ function render(){
     ctx.beginPath(); ctx.moveTo(i*cellSize,0); ctx.lineTo(i*cellSize,boardPx); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0,i*cellSize); ctx.lineTo(boardPx,i*cellSize); ctx.stroke();
   }
-  ctx.fillStyle = 'rgba(124,192,255,0.05)';
-  ctx.fillRect(CONFIG.SPAWN_COL*cellSize, 0, cellSize, boardPx);
+  // (подсветка центральной колонки УБРАНА — это была моя фича, выглядела как баг)
 
-  const hl = new Set();
-  for (const w of G.highlight) for (const [r,c] of w.cells) hl.add(r*N+c);
+  const hl = Object.create(null);
+  for (let i=0;i<G.highlight.length;i++){
+    const cells = G.highlight[i].cells;
+    for (let j=0;j<cells.length;j++) hl[cells[j][0]*N + cells[j][1]] = 1;
+  }
 
-  const delSet = new Map();
+  const delSet = Object.create(null);
   const now = performance.now();
   if (G.phase && G.phase.type === 'delete'){
     const t = Math.min(1, (now - G.phase.start) / G.phase.dur);
-    for (const d of G.deleting) delSet.set(d.r*N+d.c, t);
+    for (let i=0;i<G.deleting.length;i++){
+      delSet[G.deleting[i].r*N + G.deleting[i].c] = t;
+    }
   }
-  const fallMap = new Map();
+  const fallMap = Object.create(null);
   if (G.phase && G.phase.type === 'fall'){
     const t = Math.min(1, (now - G.phase.start) / G.phase.dur);
     const ease = 1 - Math.pow(1-t, 3);
-    for (const m of G.fallMoves){
-      fallMap.set(m.id, { c:m.c, fromR:m.fromR, toR:m.toR, t:ease });
+    for (let i=0;i<G.fallMoves.length;i++){
+      const m = G.fallMoves[i];
+      fallMap[m.id] = { fromR: m.fromR, toR: m.toR, t: ease };
     }
   }
   for (let r=0;r<N;r++){
@@ -356,13 +402,13 @@ function render(){
       const cell = board[r][c];
       if (!cell) continue;
       let y = r*cellSize;
-      let x = c*cellSize;
-      if (fallMap.has(cell.id)){
-        const fm = fallMap.get(cell.id);
+      const x = c*cellSize;
+      if (fallMap[cell.id]){
+        const fm = fallMap[cell.id];
         y = (fm.fromR + (fm.toR - fm.fromR) * fm.t) * cellSize;
       }
-      const delT = delSet.get(r*N+c);
-      const opts = { highlight: hl.has(r*N+c) };
+      const delT = delSet[r*N+c];
+      const opts = { highlight: !!hl[r*N+c] };
       if (delT != null){
         opts.alpha = 1 - delT;
         opts.scale = 1 - delT*0.35;
@@ -395,16 +441,22 @@ function updatePreviews(){
   el.pv1.textContent = G.queue[1] || '·';
 }
 let toastTimer = null;
-function toast(text, ms=900){
+function toast(text, ms){
   el.toast.textContent = text;
   el.toast.classList.add('on');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(()=> el.toast.classList.remove('on'), ms);
+  toastTimer = setTimeout(function(){ el.toast.classList.remove('on'); }, ms || 900);
 }
 function showOverlay(html){ el.overlay.innerHTML = html; el.overlay.classList.add('on'); }
 function hideOverlay(){ el.overlay.classList.remove('on'); el.overlay.innerHTML = ''; }
 
-/* ---------- Game Flow ---------- */
+// Клик по затемнению (не по кнопке) — снимает паузу
+el.overlay.addEventListener('pointerdown', function(e){
+  if (e.target.closest('button')) return;
+  if (G.state === 'PAUSED') togglePause();
+});
+
+/* ---------- Логика игры ---------- */
 function startGame(){
   newBoard();
   G.score = 0; G.level = 1; G.piece = null;
@@ -421,14 +473,14 @@ function spawnPiece(){
   const letter = G.queue.shift();
   G.queue.push(randomLetter());
   updatePreviews();
-  G.piece = { col: CONFIG.SPAWN_COL, row: 0, visualRow: 0, letter, timer: 0 };
+  G.piece = { col: CONFIG.SPAWN_COL, row: 0, visualRow: 0, letter: letter, timer: 0 };
 }
 function lockPiece(){
   const p = G.piece;
   board[p.row][p.col] = { letter: p.letter, id: nextCellId++ };
   G.piece = null;
   Audio8.lock();
-  setTimeout(()=>{ if (G.state === 'PLAYING' && !G.busy) refreshHighlight(); }, 180);
+  setTimeout(function(){ if (G.state === 'PLAYING' && !G.busy) refreshHighlight(); }, 180);
   spawnPiece();
 }
 function refreshHighlight(){ G.highlight = findWords(G.level); }
@@ -450,18 +502,25 @@ function doGO(){
   if (words.length === 0){ toast('НЕТ СЛОВ'); return; }
   Audio8.go();
   const gain = scoreWords(words);
-  const cellSet = new Set();
-  for (const w of words) for (const [r,c] of w.cells) cellSet.add(r*N+c);
-  G.deleting = [...cellSet].map(k => {
+  const cellSet = Object.create(null);
+  for (let i=0;i<words.length;i++){
+    const cells = words[i].cells;
+    for (let j=0;j<cells.length;j++) cellSet[cells[j][0]*N + cells[j][1]] = 1;
+  }
+  const keys = Object.keys(cellSet);
+  G.deleting = [];
+  for (let i=0;i<keys.length;i++){
+    const k = +keys[i];
     const r = Math.floor(k/N), c = k%N;
-    return { r, c, letter: board[r][c].letter };
-  });
+    G.deleting.push({ r: r, c: c, letter: board[r][c].letter });
+  }
   G.highlight = words;
   G.busy = true;
   G.phase = { type:'delete', start: performance.now(), dur: 220 };
-  setTimeout(()=>{
+  setTimeout(function(){
     Audio8.score();
-    for (const k of cellSet){
+    for (let i=0;i<keys.length;i++){
+      const k = +keys[i];
       const r = Math.floor(k/N), c = k%N;
       board[r][c] = null;
     }
@@ -474,7 +533,7 @@ function doGO(){
     }
     G.fallMoves = applyGravity();
     G.phase = { type:'fall', start: performance.now(), dur: 240 };
-    setTimeout(()=>{
+    setTimeout(function(){
       G.phase = null; G.fallMoves = []; G.deleting = [];
       G.busy = false; refreshHighlight();
       if (G.score >= CONFIG.MAX_SCORE) victory();
@@ -490,7 +549,7 @@ function applyGravity(){
       if (cell){
         if (writeRow !== r){
           board[writeRow][c] = cell; board[r][c] = null;
-          moves.push({ id: cell.id, c, fromR: r, toR: writeRow });
+          moves.push({ id: cell.id, c: c, fromR: r, toR: writeRow });
         }
         writeRow--;
       }
@@ -500,37 +559,34 @@ function applyGravity(){
 }
 function gameOver(){
   G.state = 'GAMEOVER'; Audio8.gameover();
-  showOverlay(`
-    <h1>ИГРА ОКОНЧЕНА</h1>
-    <p>Новый кубик не может появиться в центральной колонке.</p>
-    <p style="color:#fff;font-size:20px;font-weight:800">СЧЁТ: ${G.score.toLocaleString('ru-RU')}</p>
-    <button id="againBtn">ЗАНОВО</button>
-  `);
+  showOverlay('<h1>ИГРА ОКОНЧЕНА</h1>' +
+    '<p>Новый кубик не может появиться в центральной колонке.</p>' +
+    '<p style="color:#fff;font-size:20px;font-weight:800">СЧЁТ: ' + G.score.toLocaleString('ru-RU') + '</p>' +
+    '<button id="againBtn">ЗАНОВО</button>');
   document.getElementById('againBtn').onclick = startGame;
 }
 function victory(){
   G.state = 'VICTORY'; Audio8.victory();
-  showOverlay(`
-    <h1>ПОБЕДА!</h1>
-    <p>Ты набрал 1 000 000 очков!</p>
-    <p style="color:#fff;font-size:20px;font-weight:800">СЧЁТ: ${G.score.toLocaleString('ru-RU')}</p>
-    <button id="againBtn">ЕЩЁ РАЗ</button>
-  `);
+  showOverlay('<h1>ПОБЕДА!</h1>' +
+    '<p>Ты набрал 1 000 000 очков!</p>' +
+    '<p style="color:#fff;font-size:20px;font-weight:800">СЧЁТ: ' + G.score.toLocaleString('ru-RU') + '</p>' +
+    '<button id="againBtn">ЕЩЁ РАЗ</button>');
   document.getElementById('againBtn').onclick = startGame;
 }
 function togglePause(){
   if (G.state === 'PLAYING'){
     G.state = 'PAUSED';
-    showOverlay(`<h1>ПАУЗА</h1><p>Нажми Space или коснись поля, чтобы продолжить</p>`);
+    showOverlay('<h1>ПАУЗА</h1><p>Нажми Space, коснись поля или затемнения — продолжить</p>');
   } else if (G.state === 'PAUSED'){
-    G.state = 'PLAYING'; hideOverlay();
+    G.state = 'PLAYING';
+    hideOverlay();
     lastFrameTs = performance.now();
   }
 }
 
-/* ---------- Input ---------- */
-const keys = { down:false };
-document.addEventListener('keydown', e=>{
+/* ---------- Управление ---------- */
+const keys = { down: false };
+document.addEventListener('keydown', function(e){
   if (e.repeat && e.key !== 'ArrowDown') return;
   switch(e.key){
     case 'ArrowLeft':  moveHorizontal(-1); e.preventDefault(); break;
@@ -541,11 +597,11 @@ document.addEventListener('keydown', e=>{
     case 'r': case 'R': if (G.state==='GAMEOVER'||G.state==='VICTORY') startGame(); break;
   }
 });
-document.addEventListener('keyup', e=>{ if (e.key === 'ArrowDown') keys.down = false; });
+document.addEventListener('keyup', function(e){ if (e.key === 'ArrowDown') keys.down = false; });
 
-document.querySelectorAll('.key').forEach(btn=>{
+document.querySelectorAll('.key').forEach(function(btn){
   const act = btn.dataset.act;
-  btn.addEventListener('pointerdown', (e)=>{
+  btn.addEventListener('pointerdown', function(e){
     e.preventDefault();
     if (G.state === 'READY'){ startGame(); return; }
     if (G.state !== 'PLAYING') return;
@@ -557,16 +613,16 @@ document.querySelectorAll('.key').forEach(btn=>{
 });
 let downHold = null;
 const downBtn = document.querySelector('.key[data-act="down"]');
-downBtn.addEventListener('pointerdown', ()=>{ clearInterval(downHold); downHold = setInterval(()=>softDropStep(), 60); });
-['pointerup','pointerleave','pointercancel'].forEach(ev=>{
-  downBtn.addEventListener(ev, ()=>{ clearInterval(downHold); downHold = null; });
+downBtn.addEventListener('pointerdown', function(){ clearInterval(downHold); downHold = setInterval(softDropStep, 60); });
+['pointerup','pointerleave','pointercancel'].forEach(function(ev){
+  downBtn.addEventListener(ev, function(){ clearInterval(downHold); downHold = null; });
 });
-canvas.addEventListener('pointerdown', e=>{
+canvas.addEventListener('pointerdown', function(e){
   if (G.state === 'READY'){ startGame(); return; }
   if (e.pointerType === 'touch' && (G.state === 'PLAYING' || G.state === 'PAUSED')) togglePause();
 });
 
-/* ---------- Main Loop ---------- */
+/* ---------- Главный цикл ---------- */
 function update(dt){
   const lv = levelForScore(G.score);
   if (lv !== G.level){ G.level = lv; updateUI(); }
@@ -595,13 +651,11 @@ function loop(ts){
 function boot(){
   newBoard(); resize(); updateUI();
   const words = DICT_RAW.length;
-  showOverlay(`
-    <h1>ЛОНИКА</h1>
-    <p>Составляй слова из падающих букв. Слова НЕ удаляются сами — нажми GO, когда готов.</p>
-    <p style="font-size:12px;color:#7c8db3">← → двигать · ↓ ускорить · Enter = GO · Space = пауза</p>
-    <p style="font-size:11px;color:#5a6b8f">Словарь: ${words} слов</p>
-    <button id="startBtn">НАЧАТЬ</button>
-  `);
+  showOverlay('<h1>ЛОНИКА</h1>' +
+    '<p>Составляй слова из падающих букв. Слова НЕ удаляются сами — нажми GO, когда готов.</p>' +
+    '<p style="font-size:12px;color:#7c8db3">← → двигать · ↓ ускорить · Enter = GO · Space = пауза</p>' +
+    '<p style="font-size:11px;color:#5a6b8f">Словарь: ' + words + ' слов</p>' +
+    '<button id="startBtn">НАЧАТЬ</button>');
   document.getElementById('startBtn').onclick = startGame;
   requestAnimationFrame(loop);
 }
