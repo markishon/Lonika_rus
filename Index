@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ЛОНИКА</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{margin:0;padding:0;height:100%;background:#0b1020;color:#e8eefc;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  #app{display:flex;flex-direction:column;align-items:center;height:100vh;height:100dvh;padding:8px;gap:8px}
+  header{display:flex;justify-content:space-between;width:100%;max-width:560px;padding:0 6px}
+  .stat{display:flex;flex-direction:column;font-size:11px;letter-spacing:2px;color:#8fa3c8}
+  .stat b{font-size:22px;font-weight:800;color:#fff;letter-spacing:0;font-variant-numeric:tabular-nums}
+  #stage{position:relative}
+  canvas{display:block;border-radius:16px;background:linear-gradient(160deg,#141a33,#0d1226);
+    box-shadow:0 12px 40px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.05)}
+  #previews{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:2px;color:#8fa3c8}
+  #previews .pv{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(160deg,#2b3560,#1b2244);color:#fff;font-weight:800;font-size:16px;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+  #controls{display:flex;justify-content:space-between;width:100%;max-width:560px;padding:0 6px;gap:12px}
+  .grp{display:flex;gap:12px}
+  .key{width:64px;height:64px;border-radius:14px;border:1px solid #cfd8e8;background:linear-gradient(#f7f9ff,#dbe3f4);
+    color:#1a2440;font-size:26px;font-weight:800;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 4px 0 #9aa8c6,0 6px 14px rgba(0,0,0,.35);cursor:pointer;transition:transform .05s,box-shadow .05s}
+  .key:active{transform:translateY(3px);box-shadow:0 1px 0 #9aa8c6,0 3px 8px rgba(0,0,0,.35)}
+  .key.go{background:linear-gradient(#ffd66b,#f0a83a);color:#3a2400;font-size:18px;letter-spacing:1px;
+    border-color:#e0a83a;box-shadow:0 4px 0 #a06f18,0 6px 14px rgba(0,0,0,.35)}
+  .key.go:active{box-shadow:0 1px 0 #a06f18,0 3px 8px rgba(0,0,0,.35)}
+  @media (max-width:480px){.key{width:60px;height:60px}}
+  #overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    background:rgba(8,12,26,.82);border-radius:16px;text-align:center;padding:24px;gap:14px;backdrop-filter:blur(6px)}
+  #overlay.on{display:flex}
+  #overlay h1{margin:0;font-size:34px;letter-spacing:6px;background:linear-gradient(90deg,#7cc0ff,#c88bff,#ffb86b);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  #overlay p{margin:0;color:#a8b6d4;font-size:14px;max-width:320px;line-height:1.5}
+  #overlay button{margin-top:6px;padding:12px 24px;border-radius:12px;border:0;cursor:pointer;font-weight:800;
+    font-size:16px;letter-spacing:1px;background:linear-gradient(#ffd66b,#f0a83a);color:#3a2400;
+    box-shadow:0 4px 0 #a06f18}
+  #overlay button:active{transform:translateY(3px);box-shadow:0 1px 0 #a06f18}
+  #toast{position:absolute;left:50%;top:14%;transform:translateX(-50%);padding:8px 16px;border-radius:10px;
+    background:rgba(0,0,0,.7);color:#ffd66b;font-weight:700;letter-spacing:2px;font-size:13px;opacity:0;
+    transition:opacity .2s;pointer-events:none}
+  #toast.on{opacity:1}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="stat">СЧЁТ<b id="score">0</b></div>
+    <div class="stat" style="align-items:flex-end">УРОВЕНЬ<b id="level">1</b></div>
+  </header>
+  <div id="stage">
+    <canvas id="board"></canvas>
+    <div id="overlay"></div>
+    <div id="toast"></div>
+  </div>
+  <div id="previews"><span>ДАЛЕЕ</span><div class="pv" id="pv0">·</div><div class="pv" id="pv1">·</div></div>
+  <div id="controls">
+    <div class="grp">
+      <button class="key" data-act="left">←</button>
+      <button class="key" data-act="down">↓</button>
+    </div>
+    <div class="grp">
+      <button class="key" data-act="right">→</button>
+      <button class="key go" data-act="go">GO</button>
+    </div>
+  </div>
+</div>
+
+<!-- СЛОВАРЬ ПОДКЛЮЧАЕТСЯ ОТДЕЛЬНО — можно заменить файл, не трогая движок -->
+<script src="dictionary.js"></script>
+
+<script>
+/* ============================================================
+   ЛОНИКА — игровой движок
+   Словарь читается из window.LONIKA_DICT (файл dictionary.js)
+   ============================================================ */
+
+const CONFIG = {
+  N: 13,
+  SPAWN_COL: 6,
+  BASE_INTERVAL: 1440,
+  SPEED_FACTOR: 1.2,
+  MIN_WORD_LEN: 3,
+  SCORE_MULT: 10,
+  MAX_SCORE: 1000000,
+  COMBO: { 1:1, 2:1.2, 3:1.5, 4:2, 5:3 },
+  LEVEL_THRESHOLDS: [0, 1000, 3000, 7000, 15000, 30000, 55000, 95000,
+                     160000, 260000, 400000, 550000, 700000, 820000, 920000, 990000],
+  DIR_GROUPS: [
+    { max: 3,  dirs: ['left','right','up','down'] },
+    { max: 6,  dirs: ['right','up','down'] },
+    { max: 9,  dirs: ['right','down'] },
+    { max: 999,dirs: ['right'] },
+  ],
+  LETTER_WEIGHTS: {
+    'о':110,'е':85,'а':80,'и':74,'н':67,'т':63,'с':55,'р':47,'в':45,'л':44,
+    'к':35,'м':32,'д':30,'п':28,'у':26,'я':20,'ы':19,'г':17,'ь':17,'б':16,
+    'з':16,'ч':14,'й':12,'ж':9,'х':9,'ш':7,'ю':6,'ц':5,'щ':4,'ф':3,'э':3,
+    'ё':2,'ъ':1
+  },
+  SOFT_DROP: 0.06,
+};
+
+/* ---------- DICTIONARY (внешний) ---------- */
+const DICT_RAW = (window.LONIKA_DICT || []).filter(w =>
+  typeof w === 'string' && /^[А-ЯЁа-яё]+$/.test(w) && w.length >= CONFIG.MIN_WORD_LEN
+);
+if (!DICT_RAW.length){
+  console.error('Словарь не загружен. Проверь, что dictionary.js лежит рядом с index.html');
+}
+
+/* ---------- Trie ---------- */
+class Trie {
+  constructor(){ this.root = Object.create(null); }
+  insert(w){
+    let n = this.root;
+    for (const ch of w){ n = n[ch] || (n[ch] = Object.create(null)); }
+    n.$ = 1;
+  }
+  has(w){
+    let n = this.root;
+    for (const ch of w){ if (!(n = n[ch])) return false; }
+    return !!n.$;
+  }
+  hasPrefix(p){
+    let n = this.root;
+    for (const ch of p){ if (!(n = n[ch])) return false; }
+    return true;
+  }
+}
+const trie = new Trie();
+for (const w of DICT_RAW) trie.insert(w.toUpperCase());
+
+/* ---------- Letter Generator ---------- */
+const LETTERS = Object.keys(CONFIG.LETTER_WEIGHTS);
+const LETTER_TOTAL = LETTERS.reduce((s,k)=>s+CONFIG.LETTER_WEIGHTS[k],0);
+function randomLetter(){
+  let r = Math.random() * LETTER_TOTAL;
+  for (const ch of LETTERS){ r -= CONFIG.LETTER_WEIGHTS[ch]; if (r <= 0) return ch.toUpperCase(); }
+  return 'О';
+}
+
+/* ---------- Board ---------- */
+const N = CONFIG.N;
+let board = [];
+let nextCellId = 1;
+function newBoard(){ board = Array.from({length:N},()=>Array(N).fill(null)); }
+function canPlace(r,c){ return r>=0 && r<N && c>=0 && c<N && !board[r][c]; }
+function canMoveTo(c,r){ return r<N && canPlace(r,c); }
+
+/* ---------- Word Finder ---------- */
+function getDirs(level){
+  for (const g of CONFIG.DIR_GROUPS) if (level <= g.max) return g.dirs;
+  return ['right'];
+}
+function getDirVectors(level){
+  const v = [];
+  const d = getDirs(level);
+  if (d.includes('right')) v.push([0, 1]);
+  if (d.includes('left'))  v.push([0,-1]);
+  if (d.includes('down'))  v.push([1, 0]);
+  if (d.includes('up'))    v.push([-1,0]);
+  return v;
+}
+function findWords(level){
+  const vecs = getDirVectors(level);
+  const result = new Map();
+  for (let r=0;r<N;r++){
+    for (let c=0;c<N;c++){
+      if (!board[r][c]) continue;
+      for (const [dr,dc] of vecs){
+        let word='', cells=[];
+        let rr=r, cc=c;
+        while (rr>=0 && rr<N && cc>=0 && cc<N && board[rr][cc]){
+          word += board[rr][cc].letter;
+          cells.push([rr,cc]);
+          if (!trie.hasPrefix(word)) break;
+          if (word.length >= CONFIG.MIN_WORD_LEN && trie.has(word)){
+            const key = word + '|' + cells.map(([a,b])=>a+'-'+b).join(',');
+            if (!result.has(key)) result.set(key, { word, cells: cells.slice() });
+          }
+          rr += dr; cc += dc;
+        }
+      }
+    }
+  }
+  return [...result.values()];
+}
+
+/* ---------- Scoring ---------- */
+function comboFor(n){
+  if (n >= 5) return CONFIG.COMBO[5];
+  return CONFIG.COMBO[n] || 1;
+}
+function scoreWords(words){
+  const sum = words.reduce((s,w)=> s + w.word.length*w.word.length*CONFIG.SCORE_MULT, 0);
+  return Math.round(sum * comboFor(words.length));
+}
+
+/* ---------- Levels ---------- */
+function levelForScore(s){
+  let lv = 1;
+  for (let i=0;i<CONFIG.LEVEL_THRESHOLDS.length;i++){
+    if (s >= CONFIG.LEVEL_THRESHOLDS[i]) lv = i+1;
+  }
+  return lv;
+}
+function fallInterval(level){
+  return CONFIG.BASE_INTERVAL / Math.pow(CONFIG.SPEED_FACTOR, level-1);
+}
+
+/* ---------- Audio ---------- */
+const Audio8 = (()=>{
+  let ctx = null, enabled = true;
+  function ac(){ if(!ctx) ctx = new (window.AudioContext||window.webkitAudioContext)(); return ctx; }
+  function beep(freq, dur=0.08, type='square', vol=0.08){
+    if (!enabled) return;
+    try{
+      const a = ac(); const o = a.createOscillator(); const g = a.createGain();
+      o.type=type; o.frequency.value=freq; g.gain.value=vol;
+      o.connect(g); g.connect(a.destination);
+      const t = a.currentTime;
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+      o.start(t); o.stop(t+dur+0.02);
+    }catch(e){}
+  }
+  return {
+    toggle(){ enabled = !enabled; return enabled; },
+    move(){ beep(440, 0.04, 'square', 0.04); },
+    lock(){ beep(200, 0.08, 'triangle', 0.06); },
+    go(){ beep(520, 0.09, 'square', 0.08); },
+    score(){ beep(880, 0.06, 'sine', 0.07); setTimeout(()=>beep(1180,0.07,'sine',0.07),60); },
+    levelup(){ [523,659,784,1046].forEach((f,i)=>setTimeout(()=>beep(f,0.1,'triangle',0.08), i*70)); },
+    gameover(){ [400,300,200,140].forEach((f,i)=>setTimeout(()=>beep(f,0.18,'sawtooth',0.07), i*130)); },
+    victory(){ [523,659,784,1046,1318].forEach((f,i)=>setTimeout(()=>beep(f,0.16,'sine',0.09), i*100)); },
+  };
+})();
+
+/* ---------- Game State ---------- */
+const G = {
+  state: 'READY',
+  score: 0,
+  level: 1,
+  piece: null,
+  queue: [],
+  highlight: [],
+  busy: false,
+  phase: null,
+  fallMoves: [],
+  deleting: [],
+};
+
+/* ---------- Rendering ---------- */
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+let cellSize = 32, boardPx = 416;
+let lastFrameTs = performance.now();
+
+function resize(){
+  const controlsH = document.getElementById('controls').offsetHeight || 80;
+  const previewsH = document.getElementById('previews').offsetHeight || 40;
+  const headerH = document.querySelector('header').offsetHeight || 50;
+  const availW = Math.min(window.innerWidth - 24, 560);
+  const availH = window.innerHeight - headerH - previewsH - controlsH - 60;
+  boardPx = Math.max(220, Math.min(availW, availH));
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.width = boardPx + 'px';
+  canvas.style.height = boardPx + 'px';
+  canvas.width  = Math.round(boardPx * dpr);
+  canvas.height = Math.round(boardPx * dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  cellSize = boardPx / N;
+}
+window.addEventListener('resize', resize);
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function drawCell(x,y,letter,opts={}){
+  const pad = cellSize*0.06;
+  const s = cellSize - pad*2;
+  const r = s*0.22;
+  const alpha = opts.alpha != null ? opts.alpha : 1;
+  const scale = opts.scale != null ? opts.scale : 1;
+  const ox = x + cellSize/2, oy = y + cellSize/2;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(ox, oy);
+  ctx.scale(scale, scale);
+  ctx.translate(-cellSize/2, -cellSize/2);
+  const g = ctx.createLinearGradient(0,0,0,cellSize);
+  if (opts.highlight){ g.addColorStop(0,'#ffe28a'); g.addColorStop(1,'#f7a93c'); }
+  else if (opts.falling){ g.addColorStop(0,'#7cc0ff'); g.addColorStop(1,'#4a6cf7'); }
+  else { g.addColorStop(0,'#4b5d95'); g.addColorStop(1,'#2b3560'); }
+  ctx.fillStyle = g;
+  roundRect(pad, pad, s, s, r);
+  ctx.fill();
+  ctx.strokeStyle = opts.highlight ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.10)';
+  ctx.lineWidth = 1; ctx.stroke();
+  if (opts.highlight){
+    ctx.shadowColor = '#ffd66b'; ctx.shadowBlur = 18;
+    ctx.strokeStyle = 'rgba(255,240,180,.9)';
+    ctx.lineWidth = 2; ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+  ctx.fillStyle = opts.highlight ? '#2a1a00' : '#ffffff';
+  ctx.font = `800 ${cellSize*0.52}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(letter, cellSize/2, cellSize/2 + 1);
+  ctx.restore();
+}
+
+function render(){
+  ctx.clearRect(0,0,boardPx,boardPx);
+  ctx.fillStyle = 'rgba(255,255,255,0.02)';
+  ctx.fillRect(0,0,boardPx,boardPx);
+  ctx.strokeStyle = 'rgba(255,255,255,0.045)';
+  ctx.lineWidth = 1;
+  for (let i=1;i<N;i++){
+    ctx.beginPath(); ctx.moveTo(i*cellSize,0); ctx.lineTo(i*cellSize,boardPx); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,i*cellSize); ctx.lineTo(boardPx,i*cellSize); ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(124,192,255,0.05)';
+  ctx.fillRect(CONFIG.SPAWN_COL*cellSize, 0, cellSize, boardPx);
+
+  const hl = new Set();
+  for (const w of G.highlight) for (const [r,c] of w.cells) hl.add(r*N+c);
+
+  const delSet = new Map();
+  const now = performance.now();
+  if (G.phase && G.phase.type === 'delete'){
+    const t = Math.min(1, (now - G.phase.start) / G.phase.dur);
+    for (const d of G.deleting) delSet.set(d.r*N+d.c, t);
+  }
+  const fallMap = new Map();
+  if (G.phase && G.phase.type === 'fall'){
+    const t = Math.min(1, (now - G.phase.start) / G.phase.dur);
+    const ease = 1 - Math.pow(1-t, 3);
+    for (const m of G.fallMoves){
+      fallMap.set(m.id, { c:m.c, fromR:m.fromR, toR:m.toR, t:ease });
+    }
+  }
+  for (let r=0;r<N;r++){
+    for (let c=0;c<N;c++){
+      const cell = board[r][c];
+      if (!cell) continue;
+      let y = r*cellSize;
+      let x = c*cellSize;
+      if (fallMap.has(cell.id)){
+        const fm = fallMap.get(cell.id);
+        y = (fm.fromR + (fm.toR - fm.fromR) * fm.t) * cellSize;
+      }
+      const delT = delSet.get(r*N+c);
+      const opts = { highlight: hl.has(r*N+c) };
+      if (delT != null){
+        opts.alpha = 1 - delT;
+        opts.scale = 1 - delT*0.35;
+        opts.highlight = true;
+      }
+      drawCell(x, y, cell.letter, opts);
+    }
+  }
+  if (G.piece && (G.state === 'PLAYING') && !G.busy){
+    const p = G.piece;
+    drawCell(p.col*cellSize, p.visualRow*cellSize, p.letter, { falling:true });
+  }
+}
+
+/* ---------- UI ---------- */
+const el = {
+  score: document.getElementById('score'),
+  level: document.getElementById('level'),
+  pv0: document.getElementById('pv0'),
+  pv1: document.getElementById('pv1'),
+  overlay: document.getElementById('overlay'),
+  toast: document.getElementById('toast'),
+};
+function updateUI(){
+  el.score.textContent = G.score.toLocaleString('ru-RU');
+  el.level.textContent = G.level;
+}
+function updatePreviews(){
+  el.pv0.textContent = G.queue[0] || '·';
+  el.pv1.textContent = G.queue[1] || '·';
+}
+let toastTimer = null;
+function toast(text, ms=900){
+  el.toast.textContent = text;
+  el.toast.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> el.toast.classList.remove('on'), ms);
+}
+function showOverlay(html){ el.overlay.innerHTML = html; el.overlay.classList.add('on'); }
+function hideOverlay(){ el.overlay.classList.remove('on'); el.overlay.innerHTML = ''; }
+
+/* ---------- Game Flow ---------- */
+function startGame(){
+  newBoard();
+  G.score = 0; G.level = 1; G.piece = null;
+  G.queue = [randomLetter(), randomLetter()];
+  G.highlight = []; G.busy = false; G.phase = null;
+  G.deleting = []; G.fallMoves = [];
+  G.state = 'PLAYING';
+  updateUI(); updatePreviews();
+  hideOverlay();
+  spawnPiece();
+}
+function spawnPiece(){
+  if (board[0][CONFIG.SPAWN_COL]){ gameOver(); return; }
+  const letter = G.queue.shift();
+  G.queue.push(randomLetter());
+  updatePreviews();
+  G.piece = { col: CONFIG.SPAWN_COL, row: 0, visualRow: 0, letter, timer: 0 };
+}
+function lockPiece(){
+  const p = G.piece;
+  board[p.row][p.col] = { letter: p.letter, id: nextCellId++ };
+  G.piece = null;
+  Audio8.lock();
+  setTimeout(()=>{ if (G.state === 'PLAYING' && !G.busy) refreshHighlight(); }, 180);
+  spawnPiece();
+}
+function refreshHighlight(){ G.highlight = findWords(G.level); }
+function moveHorizontal(dir){
+  if (G.state !== 'PLAYING' || !G.piece || G.busy) return;
+  const nc = G.piece.col + dir;
+  if (nc < 0 || nc >= N) return;
+  if (!canPlace(G.piece.row, nc)) return;
+  G.piece.col = nc; Audio8.move();
+}
+function softDropStep(){
+  if (G.state !== 'PLAYING' || !G.piece || G.busy) return;
+  if (canMoveTo(G.piece.col, G.piece.row + 1)){ G.piece.row++; G.piece.timer = 0; Audio8.move(); }
+  else { lockPiece(); }
+}
+function doGO(){
+  if (G.state !== 'PLAYING' || G.busy) return;
+  const words = findWords(G.level);
+  if (words.length === 0){ toast('НЕТ СЛОВ'); return; }
+  Audio8.go();
+  const gain = scoreWords(words);
+  const cellSet = new Set();
+  for (const w of words) for (const [r,c] of w.cells) cellSet.add(r*N+c);
+  G.deleting = [...cellSet].map(k => {
+    const r = Math.floor(k/N), c = k%N;
+    return { r, c, letter: board[r][c].letter };
+  });
+  G.highlight = words;
+  G.busy = true;
+  G.phase = { type:'delete', start: performance.now(), dur: 220 };
+  setTimeout(()=>{
+    Audio8.score();
+    for (const k of cellSet){
+      const r = Math.floor(k/N), c = k%N;
+      board[r][c] = null;
+    }
+    G.score = Math.min(CONFIG.MAX_SCORE, G.score + gain);
+    updateUI();
+    const newLv = levelForScore(G.score);
+    if (newLv > G.level){
+      G.level = newLv; Audio8.levelup(); updateUI();
+      toast('УРОВЕНЬ ' + G.level, 1200);
+    }
+    G.fallMoves = applyGravity();
+    G.phase = { type:'fall', start: performance.now(), dur: 240 };
+    setTimeout(()=>{
+      G.phase = null; G.fallMoves = []; G.deleting = [];
+      G.busy = false; refreshHighlight();
+      if (G.score >= CONFIG.MAX_SCORE) victory();
+    }, 240);
+  }, 220);
+}
+function applyGravity(){
+  const moves = [];
+  for (let c=0;c<N;c++){
+    let writeRow = N-1;
+    for (let r=N-1;r>=0;r--){
+      const cell = board[r][c];
+      if (cell){
+        if (writeRow !== r){
+          board[writeRow][c] = cell; board[r][c] = null;
+          moves.push({ id: cell.id, c, fromR: r, toR: writeRow });
+        }
+        writeRow--;
+      }
+    }
+  }
+  return moves;
+}
+function gameOver(){
+  G.state = 'GAMEOVER'; Audio8.gameover();
+  showOverlay(`
+    <h1>ИГРА ОКОНЧЕНА</h1>
+    <p>Новый кубик не может появиться в центральной колонке.</p>
+    <p style="color:#fff;font-size:20px;font-weight:800">СЧЁТ: ${G.score.toLocaleString('ru-RU')}</p>
+    <button id="againBtn">ЗАНОВО</button>
+  `);
+  document.getElementById('againBtn').onclick = startGame;
+}
+function victory(){
+  G.state = 'VICTORY'; Audio8.victory();
+  showOverlay(`
+    <h1>ПОБЕДА!</h1>
+    <p>Ты набрал 1 000 000 очков!</p>
+    <p style="color:#fff;font-size:20px;font-weight:800">СЧЁТ: ${G.score.toLocaleString('ru-RU')}</p>
+    <button id="againBtn">ЕЩЁ РАЗ</button>
+  `);
+  document.getElementById('againBtn').onclick = startGame;
+}
+function togglePause(){
+  if (G.state === 'PLAYING'){
+    G.state = 'PAUSED';
+    showOverlay(`<h1>ПАУЗА</h1><p>Нажми Space или коснись поля, чтобы продолжить</p>`);
+  } else if (G.state === 'PAUSED'){
+    G.state = 'PLAYING'; hideOverlay();
+    lastFrameTs = performance.now();
+  }
+}
+
+/* ---------- Input ---------- */
+const keys = { down:false };
+document.addEventListener('keydown', e=>{
+  if (e.repeat && e.key !== 'ArrowDown') return;
+  switch(e.key){
+    case 'ArrowLeft':  moveHorizontal(-1); e.preventDefault(); break;
+    case 'ArrowRight': moveHorizontal(1);  e.preventDefault(); break;
+    case 'ArrowDown':  keys.down = true; e.preventDefault(); break;
+    case 'Enter':      doGO(); e.preventDefault(); break;
+    case ' ':          togglePause(); e.preventDefault(); break;
+    case 'r': case 'R': if (G.state==='GAMEOVER'||G.state==='VICTORY') startGame(); break;
+  }
+});
+document.addEventListener('keyup', e=>{ if (e.key === 'ArrowDown') keys.down = false; });
+
+document.querySelectorAll('.key').forEach(btn=>{
+  const act = btn.dataset.act;
+  btn.addEventListener('pointerdown', (e)=>{
+    e.preventDefault();
+    if (G.state === 'READY'){ startGame(); return; }
+    if (G.state !== 'PLAYING') return;
+    if (act === 'left')  moveHorizontal(-1);
+    if (act === 'right') moveHorizontal(1);
+    if (act === 'down')  softDropStep();
+    if (act === 'go')    doGO();
+  });
+});
+let downHold = null;
+const downBtn = document.querySelector('.key[data-act="down"]');
+downBtn.addEventListener('pointerdown', ()=>{ clearInterval(downHold); downHold = setInterval(()=>softDropStep(), 60); });
+['pointerup','pointerleave','pointercancel'].forEach(ev=>{
+  downBtn.addEventListener(ev, ()=>{ clearInterval(downHold); downHold = null; });
+});
+canvas.addEventListener('pointerdown', e=>{
+  if (G.state === 'READY'){ startGame(); return; }
+  if (e.pointerType === 'touch' && (G.state === 'PLAYING' || G.state === 'PAUSED')) togglePause();
+});
+
+/* ---------- Main Loop ---------- */
+function update(dt){
+  const lv = levelForScore(G.score);
+  if (lv !== G.level){ G.level = lv; updateUI(); }
+  if (G.state !== 'PLAYING') return;
+  if (G.busy) return;
+  if (!G.piece) return;
+  const base = fallInterval(G.level);
+  const eff = keys.down ? base * CONFIG.SOFT_DROP : base;
+  G.piece.timer += dt;
+  let safety = 8;
+  while (G.piece.timer >= eff && safety-- > 0){
+    G.piece.timer -= eff;
+    if (canMoveTo(G.piece.col, G.piece.row + 1)) G.piece.row++;
+    else { lockPiece(); return; }
+  }
+  let frac = G.piece.timer / eff;
+  if (!canMoveTo(G.piece.col, G.piece.row + 1)) frac = 0;
+  G.piece.visualRow = G.piece.row + Math.min(1, Math.max(0, frac));
+}
+function loop(ts){
+  const dt = Math.min(60, ts - lastFrameTs);
+  lastFrameTs = ts;
+  update(dt); render();
+  requestAnimationFrame(loop);
+}
+function boot(){
+  newBoard(); resize(); updateUI();
+  const words = DICT_RAW.length;
+  showOverlay(`
+    <h1>ЛОНИКА</h1>
+    <p>Составляй слова из падающих букв. Слова НЕ удаляются сами — нажми GO, когда готов.</p>
+    <p style="font-size:12px;color:#7c8db3">← → двигать · ↓ ускорить · Enter = GO · Space = пауза</p>
+    <p style="font-size:11px;color:#5a6b8f">Словарь: ${words} слов</p>
+    <button id="startBtn">НАЧАТЬ</button>
+  `);
+  document.getElementById('startBtn').onclick = startGame;
+  requestAnimationFrame(loop);
+}
+boot();
+</script>
+</body>
+</html>
