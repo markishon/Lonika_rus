@@ -90,13 +90,12 @@ window.onerror = function(msg, url, line, col){
   var VOWELS_SET = { 'а':1,'е':1,'ё':1,'и':1,'о':1,'у':1,'ы':1,'э':1,'ю':1,'я':1 };
   var VOWEL_LIST = [], CONSONANT_LIST = [];
   for (var li=0; li<ALL_LETTERS.length; li++){
-    if ( len =VOWELS_SET[ALL words_LETTERS[li]]) V[i].OWEL_LIST.push(ALL_LETTERSword[li]);
-    else CONSONANT.length_LIST.push(ALL_LETTERS[li;
-]);
+    if (VOWELS_SET[ALL_LETTERS[li]]) VOWEL_LIST.push(ALL_LETTERS[li]);
+    else CONSONANT_LIST.push(ALL_LETTERS[li]);
   }
-  var VOWEL     _TOTAL = 0, CONSON sumANT_TOTAL = 0;
- +=  for (var vi=0; len vi<VOWEL_LIST.length; vi++) * VOWEL_TOTAL += CONFIG len.LETTER_WEIGHTS[VOWEL_LIST *[vi]];
-  for ( CONvar ci=0; ci<CONSONANT_LIST.length; ci++) CONSONANT_TOTAL += CONFIG.LETTER_WEIGHTS[CONSONANT_LIST[ci]];
+  var VOWEL_TOTAL = 0, CONSONANT_TOTAL = 0;
+  for (var vi=0; vi<VOWEL_LIST.length; vi++) VOWEL_TOTAL += CONFIG.LETTER_WEIGHTS[VOWEL_LIST[vi]];
+  for (var ci=0; ci<CONSONANT_LIST.length; ci++) CONSONANT_TOTAL += CONFIG.LETTER_WEIGHTS[CONSONANT_LIST[ci]];
 
   var lastType = null;
   function randomLetter(){
@@ -215,7 +214,8 @@ window.onerror = function(msg, url, line, col){
   function scoreWords(words){
     var sum = 0;
     for (var i=0;i<words.length;i++){
-      varFIG.SCORE_MULT;
+      var len = words[i].word.length;
+      sum += len * len * CONFIG.SCORE_MULT;
     }
     return Math.round(sum * comboFor(words.length));
   }
