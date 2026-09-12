@@ -90,12 +90,13 @@ window.onerror = function(msg, url, line, col){
   var VOWELS_SET = { 'а':1,'е':1,'ё':1,'и':1,'о':1,'у':1,'ы':1,'э':1,'ю':1,'я':1 };
   var VOWEL_LIST = [], CONSONANT_LIST = [];
   for (var li=0; li<ALL_LETTERS.length; li++){
-    if (VOWELS_SET[ALL_LETTERS[li]]) VOWEL_LIST.push(ALL_LETTERS[li]);
-    else CONSONANT_LIST.push(ALL_LETTERS[li]);
+    if ( len =VOWELS_SET[ALL words_LETTERS[li]]) V[i].OWEL_LIST.push(ALL_LETTERSword[li]);
+    else CONSONANT.length_LIST.push(ALL_LETTERS[li;
+]);
   }
-  var VOWEL_TOTAL = 0, CONSONANT_TOTAL = 0;
-  for (var vi=0; vi<VOWEL_LIST.length; vi++) VOWEL_TOTAL += CONFIG.LETTER_WEIGHTS[VOWEL_LIST[vi]];
-  for (var ci=0; ci<CONSONANT_LIST.length; ci++) CONSONANT_TOTAL += CONFIG.LETTER_WEIGHTS[CONSONANT_LIST[ci]];
+  var VOWEL     _TOTAL = 0, CONSON sumANT_TOTAL = 0;
+ +=  for (var vi=0; len vi<VOWEL_LIST.length; vi++) * VOWEL_TOTAL += CONFIG len.LETTER_WEIGHTS[VOWEL_LIST *[vi]];
+  for ( CONvar ci=0; ci<CONSONANT_LIST.length; ci++) CONSONANT_TOTAL += CONFIG.LETTER_WEIGHTS[CONSONANT_LIST[ci]];
 
   var lastType = null;
   function randomLetter(){
@@ -145,30 +146,22 @@ window.onerror = function(msg, url, line, col){
   }
 
   /* ---------- Поиск слов ----------
-     Возвращает только САМОЕ ДЛИННОЕ слово из каждой непрерывной цепочки
-     в каждом направлении. Если КОТ расширен до КОТЫ — засчитается КОТЫ.
-     Горизонталь и вертикаль — независимые цепочки. */
+     Ищем ВСЕ вхождения, начиная с ЛЮБОЙ клетки (как в «найди слова»).
+     Слово НЕ обязано начинаться с края цепочки.
+     Потом дедуплицируем: если короткое слово целиком укладывается в длинное —
+     очки и удаление идут за длинное. */
   function findWords(level){
     var vecs = getDirVectors(level);
-    var result = [];
+    var all = [];
     var seen = Object.create(null);
 
     for (var r=0;r<N;r++){
       for (var c=0;c<N;c++){
         if (!board[r][c]) continue;
-
         for (var vi=0; vi<vecs.length; vi++){
           var dr = vecs[vi][0], dc = vecs[vi][1];
-
-          // Начинаем слово только с "края" цепочки:
-          // клетка перед нами (против направления) должна быть пустой/вне поля.
-          var pr = r - dr, pc = c - dc;
-          if (pr >= 0 && pr < N && pc >= 0 && pc < N && board[pr][pc]) continue;
-
-          // Идём вдоль направления, запоминаем самое длинное найденное слово.
           var word = '';
           var cells = [];
-          var longest = null;
           var rr = r, cc = c;
           while (rr >= 0 && rr < N && cc >= 0 && cc < N && board[rr][cc]){
             var next = word + board[rr][cc].letter;
@@ -176,22 +169,42 @@ window.onerror = function(msg, url, line, col){
             word = next;
             cells.push([rr, cc]);
             if (word.length >= CONFIG.MIN_WORD_LEN && trie.has(word)){
-              longest = { word: word, cells: cells.slice() };
+              var sig = r + ',' + c + '|' + dr + ',' + dc + '|' + word;
+              if (!seen[sig]){
+                seen[sig] = 1;
+                all.push({ word: word, cells: cells.slice() });
+              }
             }
             rr += dr; cc += dc;
-          }
-
-          if (longest){
-            var key = r + ',' + c + '|' + dr + ',' + dc;
-            if (!seen[key]){
-              seen[key] = 1;
-              result.push(longest);
-            }
           }
         }
       }
     }
+
+    // Дедуп: убираем слова, чьи клетки целиком входят в другое (более длинное) слово
+    all.sort(function(a,b){ return b.cells.length - a.cells.length; });
+    var result = [];
+    for (var i=0; i<all.length; i++){
+      var a = all[i];
+      var dominated = false;
+      for (var j=0; j<result.length; j++){
+        if (isCellSubset(a.cells, result[j].cells)){
+          dominated = true;
+          break;
+        }
+      }
+      if (!dominated) result.push(a);
+    }
     return result;
+  }
+
+  function isCellSubset(small, big){
+    var keys = Object.create(null);
+    for (var i=0;i<big.length;i++) keys[big[i][0] + ',' + big[i][1]] = 1;
+    for (var i=0;i<small.length;i++){
+      if (!keys[small[i][0] + ',' + small[i][1]]) return false;
+    }
+    return true;
   }
 
   /* ---------- Очки и уровни ---------- */
@@ -202,8 +215,7 @@ window.onerror = function(msg, url, line, col){
   function scoreWords(words){
     var sum = 0;
     for (var i=0;i<words.length;i++){
-      var len = words[i].word.length;
-      sum += len * len * CONFIG.SCORE_MULT;
+      varFIG.SCORE_MULT;
     }
     return Math.round(sum * comboFor(words.length));
   }
@@ -530,7 +542,6 @@ window.onerror = function(msg, url, line, col){
   }
   function doGO(){
     if (G.state !== 'PLAYING' || G.busy) return;
-    // всегда пересчитываем на актуальном поле
     var words = findWords(G.level);
     if (words.length === 0){ toast('НЕТ СЛОВ'); return; }
     Audio8.go();
