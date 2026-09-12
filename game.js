@@ -1,5 +1,6 @@
 /* =====================================================================
-   ЛОНИКА — движок
+   ЛОНИКА — движок v3
+   Топ-15 ×4, согласных +30%, бонус ×2 за редкие буквы
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -42,8 +43,35 @@ window.onerror = function(msg, url, line, col){
       'ё':2,'ъ':1
     },
     SOFT_DROP: 0.06,
-    HIGHLIGHT_REFRESH_MS: 200
+    HIGHLIGHT_REFRESH_MS: 200,
+
+    /* --- генерация --- */
+    TOP15: ['о','е','а','и','н','т','с','р','в','л','к','м','д','п','у'],
+    TOP_BOOST: 4,             // каждая топ-15 буква получает вес ×4
+    MIN_WEIGHT: 2,            // минимальный вес, чтобы ъ/ё не исчезли
+    CONSONANT_RATIO: 0.565,   // 56.5% согласных = +30% над гласными
+
+    /* --- бонус за редкие буквы --- */
+    RARE_LETTERS: ['ж','х','ш','ю','ц','щ','ф','э','ё','ъ'],
+    RARE_BONUS: 2             // ×2 к очкам за слово с редкой буквой
   };
+
+  /* ---------- Производные структуры ---------- */
+  var TOP15_SET = Object.create(null);
+  for (var t=0;t<CONFIG.TOP15.length;t++) TOP15_SET[CONFIG.TOP15[t]] = 1;
+
+  var RARE_SET = Object.create(null);
+  for (var ri=0; ri<CONFIG.RARE_LETTERS.length; ri++) RARE_SET[CONFIG.RARE_LETTERS[ri]] = 1;
+
+  var EFFECTIVE_WEIGHTS = {};
+  (function(){
+    for (var ch in CONFIG.LETTER_WEIGHTS){
+      var w = CONFIG.LETTER_WEIGHTS[ch];
+      if (TOP15_SET[ch]) w *= CONFIG.TOP_BOOST;
+      if (w < CONFIG.MIN_WEIGHT) w = CONFIG.MIN_WEIGHT;
+      EFFECTIVE_WEIGHTS[ch] = w;
+    }
+  })();
 
   /* ---------- СЛОВАРЬ ---------- */
   var DICT_RAW = (window.LONIKA_DICT || []).filter(function(w){
@@ -85,8 +113,8 @@ window.onerror = function(msg, url, line, col){
     trie.insert(DICT_RAW[di].toUpperCase());
   }
 
-  /* ---------- Генератор букв с чередованием ---------- */
-  var ALL_LETTERS = Object.keys(CONFIG.LETTER_WEIGHTS);
+  /* ---------- Генератор букв ---------- */
+  var ALL_LETTERS = Object.keys(EFFECTIVE_WEIGHTS);
   var VOWELS_SET = { 'а':1,'е':1,'ё':1,'и':1,'о':1,'у':1,'ы':1,'э':1,'ю':1,'я':1 };
   var VOWEL_LIST = [], CONSONANT_LIST = [];
   for (var li=0; li<ALL_LETTERS.length; li++){
@@ -94,20 +122,46 @@ window.onerror = function(msg, url, line, col){
     else CONSONANT_LIST.push(ALL_LETTERS[li]);
   }
   var VOWEL_TOTAL = 0, CONSONANT_TOTAL = 0;
-  for (var vi=0; vi<VOWEL_LIST.length; vi++) VOWEL_TOTAL += CONFIG.LETTER_WEIGHTS[VOWEL_LIST[vi]];
-  for (var ci=0; ci<CONSONANT_LIST.length; ci++) CONSONANT_TOTAL += CONFIG.LETTER_WEIGHTS[CONSONANT_LIST[ci]];
+  for (var vi=0; vi<VOWEL_LIST.length; vi++)     VOWEL_TOTAL     += EFFECTIVE_WEIGHTS[VOWEL_LIST[vi]];
+  for (var ci=0; ci<CONSONANT_LIST.length; ci++) CONSONANT_TOTAL += EFFECTIVE_WEIGHTS[CONSONANT_LIST[ci]];
 
-  var lastType = null;
-  function randomLetter(){
-    var list, total;
-    if (lastType === 'v'){ list = CONSONANT_LIST; total = CONSONANT_TOTAL; lastType = 'c'; }
-    else                 { list = VOWEL_LIST;     total = VOWEL_TOTAL;     lastType = 'v'; }
-    var r = Math.random() * total;
-    for (var i=0;i<list.length;i++){
-      r -= CONFIG.LETTER_WEIGHTS[list[i]];
-      if (r <= 0) return list[i].toUpperCase();
+  // История последних типов — чтобы не было 3+ одинаковых подряд
+  var typeHistory = [];
+
+  function pickType(){
+    var n = typeHistory.length;
+    if (n >= 2 && typeHistory[n-1] === typeHistory[n-2]){
+      return typeHistory[n-1] === 'v' ? 'c' : 'v';
     }
-    return list[0].toUpperCase();
+    return Math.random() < CONFIG.CONSONANT_RATIO ? 'c' : 'v';
+  }
+  function recordType(t){
+    typeHistory.push(t);
+    if (typeHistory.length > 3) typeHistory.shift();
+  }
+  function randomLetter(){
+    var type = pickType();
+    var list  = type === 'c' ? CONSONANT_LIST : VOWEL_LIST;
+    var total = type === 'c' ? CONSONANT_TOTAL : VOWEL_TOTAL;
+    var r = Math.random() * total;
+    var chosen = list[0];
+    for (var i=0;i<list.length;i++){
+      r -= EFFECTIVE_WEIGHTS[list[i]];
+      if (r <= 0){ chosen = list[i]; break; }
+    }
+    recordType(type);
+    return chosen.toUpperCase();
+  }
+
+  function isRareLetter(ch){
+    if (!ch) return false;
+    return !!RARE_SET[ch.toLowerCase()];
+  }
+  function hasRareInWord(word){
+    for (var i=0;i<word.length;i++){
+      if (isRareLetter(word.charAt(i))) return true;
+    }
+    return false;
   }
 
   /* ---------- Поле ---------- */
@@ -144,11 +198,7 @@ window.onerror = function(msg, url, line, col){
     return v;
   }
 
-  /* ---------- Поиск слов ----------
-     Ищем ВСЕ вхождения, начиная с ЛЮБОЙ клетки (как в «найди слова»).
-     Слово НЕ обязано начинаться с края цепочки.
-     Потом дедуплицируем: если короткое слово целиком укладывается в длинное —
-     очки и удаление идут за длинное. */
+  /* ---------- Поиск слов ---------- */
   function findWords(level){
     var vecs = getDirVectors(level);
     var all = [];
@@ -171,7 +221,11 @@ window.onerror = function(msg, url, line, col){
               var sig = r + ',' + c + '|' + dr + ',' + dc + '|' + word;
               if (!seen[sig]){
                 seen[sig] = 1;
-                all.push({ word: word, cells: cells.slice() });
+                all.push({
+                  word: word,
+                  cells: cells.slice(),
+                  bonus: hasRareInWord(word)
+                });
               }
             }
             rr += dr; cc += dc;
@@ -180,14 +234,13 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // Дедуп: убираем слова, чьи клетки целиком входят в другое (более длинное) слово
     all.sort(function(a,b){ return b.cells.length - a.cells.length; });
     var result = [];
     for (var i=0; i<all.length; i++){
       var a = all[i];
       var dominated = false;
       for (var j=0; j<result.length; j++){
-        if (isCellSubset(a.cells, result[j].cells)){
+        if (a.cells.length < result[j].cells.length && isCellSubset(a.cells, result[j].cells)){
           dominated = true;
           break;
         }
@@ -196,7 +249,6 @@ window.onerror = function(msg, url, line, col){
     }
     return result;
   }
-
   function isCellSubset(small, big){
     var keys = Object.create(null);
     for (var i=0;i<big.length;i++) keys[big[i][0] + ',' + big[i][1]] = 1;
@@ -214,8 +266,11 @@ window.onerror = function(msg, url, line, col){
   function scoreWords(words){
     var sum = 0;
     for (var i=0;i<words.length;i++){
-      var len = words[i].word.length;
-      sum += len * len * CONFIG.SCORE_MULT;
+      var w = words[i];
+      var len = w.word.length;
+      var base = len * len * CONFIG.SCORE_MULT;
+      if (w.bonus) base *= CONFIG.RARE_BONUS;
+      sum += base;
     }
     return Math.round(sum * comboFor(words.length));
   }
@@ -271,6 +326,12 @@ window.onerror = function(msg, url, line, col){
       lock:  function(){ beep(200, 0.08, 'triangle', 0.06); },
       go:    function(){ beep(520, 0.09, 'square', 0.08); },
       score: function(){ beep(880, 0.06, 'sine', 0.07); setTimeout(function(){ beep(1180,0.07,'sine',0.07); }, 60); },
+      bonus: function(){
+        // радостный «бип» для бонусного слова
+        beep(880, 0.07, 'sine', 0.09);
+        setTimeout(function(){ beep(1175, 0.08, 'sine', 0.09); }, 70);
+        setTimeout(function(){ beep(1568, 0.10, 'sine', 0.10); }, 150);
+      },
       levelup: function(){
         [523,659,784,1046].forEach(function(f,i){ setTimeout(function(){ beep(f,0.1,'triangle',0.08); }, i*70); });
       },
@@ -347,25 +408,48 @@ window.onerror = function(msg, url, line, col){
     ctx.scale(scale, scale);
     ctx.translate(-cellSize/2, -cellSize/2);
     var g = ctx.createLinearGradient(0, 0, 0, cellSize);
-    if (opts.highlight){
-      g.addColorStop(0, '#ffe28a'); g.addColorStop(1, '#f7a93c');
+    var isBonus = opts.highlight && opts.bonus;
+    if (isBonus){
+      // фиолетовый бонусный
+      g.addColorStop(0, '#ffb3ff');
+      g.addColorStop(1, '#b04cff');
+    } else if (opts.highlight){
+      g.addColorStop(0, '#ffe28a');
+      g.addColorStop(1, '#f7a93c');
+    } else if (opts.falling && opts.rare){
+      // редкая падающая буква — фиолетовая
+      g.addColorStop(0, '#d99eff');
+      g.addColorStop(1, '#a94cff');
     } else if (opts.falling){
-      g.addColorStop(0, '#7cc0ff'); g.addColorStop(1, '#4a6cf7');
+      g.addColorStop(0, '#7cc0ff');
+      g.addColorStop(1, '#4a6cf7');
     } else {
-      g.addColorStop(0, '#4b5d95'); g.addColorStop(1, '#2b3560');
+      g.addColorStop(0, '#4b5d95');
+      g.addColorStop(1, '#2b3560');
     }
     ctx.fillStyle = g;
     roundRect(pad, pad, s, s, r);
     ctx.fill();
-    ctx.strokeStyle = opts.highlight ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.10)';
-    ctx.lineWidth = 1; ctx.stroke();
-    if (opts.highlight){
+    if (isBonus){
+      ctx.strokeStyle = 'rgba(255,255,255,.95)';
+      ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.shadowColor = '#e07cff'; ctx.shadowBlur = 22;
+      ctx.strokeStyle = 'rgba(255,200,255,.95)';
+      ctx.lineWidth = 2.5; ctx.stroke();
+      ctx.shadowBlur = 0;
+    } else if (opts.highlight){
+      ctx.strokeStyle = 'rgba(255,255,255,.85)';
+      ctx.lineWidth = 1; ctx.stroke();
       ctx.shadowColor = '#ffd66b'; ctx.shadowBlur = 18;
       ctx.strokeStyle = 'rgba(255,240,180,.9)';
       ctx.lineWidth = 2; ctx.stroke();
       ctx.shadowBlur = 0;
+    } else {
+      ctx.strokeStyle = 'rgba(255,255,255,.10)';
+      ctx.lineWidth = 1; ctx.stroke();
     }
-    ctx.fillStyle = opts.highlight ? '#2a1a00' : '#ffffff';
+    ctx.fillStyle = (isBonus || opts.highlight) ? '#2a0a00' : '#ffffff';
+    if (isBonus) ctx.fillStyle = '#2a0033';
     ctx.font = '800 ' + (cellSize * 0.52) + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(letter, cellSize/2, cellSize/2 + 1);
@@ -382,10 +466,16 @@ window.onerror = function(msg, url, line, col){
       ctx.beginPath(); ctx.moveTo(i*cellSize, 0); ctx.lineTo(i*cellSize, boardPx); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, i*cellSize); ctx.lineTo(boardPx, i*cellSize); ctx.stroke();
     }
+    // карта подсветки: 'n' обычная, 'b' бонусная
     var hl = Object.create(null);
     for (var hi=0; hi<G.highlight.length; hi++){
-      var hcells = G.highlight[hi].cells;
-      for (var hj=0; hj<hcells.length; hj++) hl[hcells[hj][0]*N + hcells[hj][1]] = 1;
+      var hw = G.highlight[hi];
+      var marker = hw.bonus ? 'b' : 'n';
+      var hcells = hw.cells;
+      for (var hj=0; hj<hcells.length; hj++){
+        var key = hcells[hj][0]*N + hcells[hj][1];
+        if (hl[key] !== 'b') hl[key] = marker;
+      }
     }
     var delSet = Object.create(null);
     var now = performance.now();
@@ -415,17 +505,26 @@ window.onerror = function(msg, url, line, col){
           y = (fm.fromR + (fm.toR - fm.fromR) * fm.t) * cellSize;
         }
         var delT = delSet[r*N + c];
-        var opts = { highlight: !!hl[r*N + c] };
+        var mark = hl[r*N + c];
+        var opts = {
+          highlight: !!mark,
+          bonus: mark === 'b'
+        };
         if (delT != null){
           opts.alpha = 1 - delT;
           opts.scale = 1 - delT * 0.35;
           opts.highlight = true;
+          if (mark !== 'b') opts.bonus = false;
         }
         drawCell(x, y, cell.letter, opts);
       }
     }
     if (G.piece && (G.state === 'PLAYING') && !G.busy){
-      drawCell(G.piece.col * cellSize, G.piece.visualRow * cellSize, G.piece.letter, { falling: true });
+      var p = G.piece;
+      drawCell(p.col * cellSize, p.visualRow * cellSize, p.letter, {
+        falling: true,
+        rare: isRareLetter(p.letter)
+      });
     }
   }
 
@@ -460,13 +559,26 @@ window.onerror = function(msg, url, line, col){
     updateDirs();
   }
   function updatePreviews(){
-    if (el.pv0) el.pv0.textContent = G.queue[0] || '·';
-    if (el.pv1) el.pv1.textContent = G.queue[1] || '·';
+    if (el.pv0){
+      el.pv0.textContent = G.queue[0] || '·';
+      var r0 = isRareLetter(G.queue[0]);
+      el.pv0.style.background = r0 ? 'linear-gradient(160deg,#4a2a6a,#2a1a4a)' : '';
+      el.pv0.style.color = r0 ? '#ffbaff' : '';
+      el.pv0.style.boxShadow = r0 ? 'inset 0 0 0 1px rgba(200,140,255,.5)' : '';
+    }
+    if (el.pv1){
+      el.pv1.textContent = G.queue[1] || '·';
+      var r1 = isRareLetter(G.queue[1]);
+      el.pv1.style.background = r1 ? 'linear-gradient(160deg,#4a2a6a,#2a1a4a)' : '';
+      el.pv1.style.color = r1 ? '#ffbaff' : '';
+      el.pv1.style.boxShadow = r1 ? 'inset 0 0 0 1px rgba(200,140,255,.5)' : '';
+    }
   }
   var toastTimer = null;
-  function toast(text, ms){
+  function toast(text, ms, color){
     if (!el.toast) return;
     el.toast.textContent = text;
+    el.toast.style.color = color || '#ffd66b';
     el.toast.classList.add('on');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function(){ el.toast.classList.remove('on'); }, ms || 900);
@@ -493,7 +605,7 @@ window.onerror = function(msg, url, line, col){
     G.score = 0;
     G.level = 1;
     G.piece = null;
-    lastType = null;
+    typeHistory = [];
     G.queue = [randomLetter(), randomLetter()];
     G.highlight = [];
     G.busy = false;
@@ -518,12 +630,10 @@ window.onerror = function(msg, url, line, col){
     board[p.row][p.col] = { letter: p.letter, id: nextCellId++ };
     G.piece = null;
     Audio8.lock();
-    refreshHighlight();          // сразу, без задержки
+    refreshHighlight();
     spawnPiece();
   }
-  function refreshHighlight(){
-    G.highlight = findWords(G.level);
-  }
+  function refreshHighlight(){ G.highlight = findWords(G.level); }
   function moveHorizontal(dir){
     if (G.state !== 'PLAYING' || !G.piece || G.busy) return;
     var nc = G.piece.col + dir;
@@ -545,7 +655,19 @@ window.onerror = function(msg, url, line, col){
     var words = findWords(G.level);
     if (words.length === 0){ toast('НЕТ СЛОВ'); return; }
     Audio8.go();
+    var hasBonus = false;
+    for (var bi=0;bi<words.length;bi++) if (words[bi].bonus) hasBonus = true;
+    if (hasBonus) Audio8.bonus();
+
     var gain = scoreWords(words);
+
+    // визуальная вспышка бонуса
+    if (hasBonus){
+      toast('БОНУС ×' + CONFIG.RARE_BONUS + '  +' + gain, 1400, '#ff9eff');
+    } else {
+      toast('+' + gain, 900, '#ffd66b');
+    }
+
     var cellSet = Object.create(null);
     for (var i=0;i<words.length;i++){
       var cs = words[i].cells;
@@ -735,9 +857,13 @@ window.onerror = function(msg, url, line, col){
     resize();
     updateUI();
     var count = DICT_RAW.length;
+    var rareStr = CONFIG.RARE_LETTERS.join(' ').toUpperCase();
     showOverlay('<h1>ЛОНИКА</h1>' +
       '<p>Составляй слова из падающих букв. Слова НЕ удаляются сами — нажми GO, когда готов.</p>' +
       '<p style="font-size:12px;color:#7c8db3">← → двигать · ↓ ускорить · Enter = GO · Space = пауза</p>' +
+      '<p style="font-size:13px;color:#ff9eff;margin-top:8px">' +
+      'Слова с редкими буквами <b>' + rareStr + '</b><br>дают <b>×' + CONFIG.RARE_BONUS + '</b> очков!' +
+      '</p>' +
       '<p style="font-size:11px;color:#5a6b8f">Словарь: ' + count + ' слов</p>' +
       '<button id="startBtn">НАЧАТЬ</button>');
     document.getElementById('startBtn').onclick = startGame;
