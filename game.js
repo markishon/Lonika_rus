@@ -2,6 +2,7 @@
    ЛОНИКА — движок
    ===================================================================== */
 
+/* Отлов ошибок: если что-то упадёт — увидим красную плашку внизу */
 window.onerror = function(msg, url, line, col){
   var el = document.getElementById('errbox');
   if (!el){
@@ -143,16 +144,11 @@ window.onerror = function(msg, url, line, col){
     return v;
   }
 
-  /* ---------- Поиск слов ----------
-     Возвращает только МАКСИМАЛЬНЫЕ слова:
-     если клетки слова A полностью входят в клетки более длинного слова B,
-     то A отбрасывается. Так КОТ внутри КОШКА не считается отдельно.
-  */
+  /* ---------- Поиск слов ---------- */
   function findWords(level){
     var vecs = getDirVectors(level);
-    var raw = [];
+    var result = [];
     var seen = Object.create(null);
-
     for (var r=0;r<N;r++){
       for (var c=0;c<N;c++){
         if (!board[r][c]) continue;
@@ -170,7 +166,7 @@ window.onerror = function(msg, url, line, col){
               var key = cells[0][0] + ',' + cells[0][1] + '|' + word;
               if (!seen[key]){
                 seen[key] = 1;
-                raw.push({ word: word, cells: cells.slice() });
+                result.push({ word: word, cells: cells.slice() });
               }
             }
             if (!trie.hasPrefix(word)) break;
@@ -178,36 +174,6 @@ window.onerror = function(msg, url, line, col){
           }
         }
       }
-    }
-
-    if (raw.length <= 1) return raw;
-
-    // Для быстрого сравнения — упакуем клетки каждого слова в битовую маску (N*N <= 121 бит → массив из 4 чисел).
-    // Проще: массив индексов r*N+c, отсортированный, и сравниваем через вложенный цикл.
-    var packed = [];
-    for (var i=0;i<raw.length;i++){
-      var set = Object.create(null);
-      var cs = raw[i].cells;
-      for (var j=0;j<cs.length;j++) set[cs[j][0]*N + cs[j][1]] = 1;
-      packed.push({ idx: i, set: set, len: cs.length, cells: cs });
-    }
-
-    var result = [];
-    for (var a=0;a<packed.length;a++){
-      var A = packed[a];
-      var nested = false;
-      for (var b=0;b<packed.length;b++){
-        if (a === b) continue;
-        var B = packed[b];
-        if (B.len <= A.len) continue;  // вложить можно только в более длинное
-        var allIn = true;
-        for (var k=0;k<A.cells.length;k++){
-          var keyA = A.cells[k][0]*N + A.cells[k][1];
-          if (!B.set[keyA]){ controls allIn = false; break; }
-        }
-H        if (allIn){ nested = true; break; }
-      }
-      if (!nested) result.push(raw[A.idx]);
     }
     return result;
   }
@@ -313,7 +279,7 @@ H        if (allIn){ nested = true; break; }
     var controlsEl = document.getElementById('controls');
     var previewsEl = document.getElementById('previews');
     var headerEl = document.querySelector('header');
-    var = controlsEl ? controlsEl.offsetHeight : 80;
+    var controlsH = controlsEl ? controlsEl.offsetHeight : 80;
     var previewsH = previewsEl ? previewsEl.offsetHeight : 40;
     var headerH = headerEl ? headerEl.offsetHeight : 50;
     var availW = Math.min(window.innerWidth - 24, 560);
@@ -524,8 +490,7 @@ H        if (allIn){ nested = true; break; }
     board[p.row][p.col] = { letter: p.letter, id: nextCellId++ };
     G.piece = null;
     Audio8.lock();
-    // обновляем подсветку сразу — игрок видит все допустимые слова в любой момент
-    refreshHighlight();
+    setTimeout(function(){ if (G.state === 'PLAYING' && !G.busy) refreshHighlight(); }, 180);
     spawnPiece();
   }
   function refreshHighlight(){ G.highlight = findWords(G.level); }
@@ -589,7 +554,7 @@ H        if (allIn){ nested = true; break; }
         G.fallMoves = [];
         G.deleting = [];
         G.busy = false;
-        refreshHighlight();               // после осыпания — сразу пересчёт
+        refreshHighlight();
         if (G.score >= CONFIG.MAX_SCORE) victory();
       }, 240);
     }, 220);
