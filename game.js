@@ -2,7 +2,6 @@
    ЛОНИКА — движок
    ===================================================================== */
 
-/* Отлов ошибок: если что-то упадёт — увидим красную плашку внизу */
 window.onerror = function(msg, url, line, col){
   var el = document.getElementById('errbox');
   if (!el){
@@ -42,7 +41,8 @@ window.onerror = function(msg, url, line, col){
       'з':16,'ч':14,'й':12,'ж':9,'х':9,'ш':7,'ю':6,'ц':5,'щ':4,'ф':3,'э':3,
       'ё':2,'ъ':1
     },
-    SOFT_DROP: 0.06
+    SOFT_DROP: 0.06,
+    HIGHLIGHT_REFRESH_MS: 200
   };
 
   /* ---------- СЛОВАРЬ ---------- */
@@ -144,33 +144,49 @@ window.onerror = function(msg, url, line, col){
     return v;
   }
 
-  /* ---------- Поиск слов ---------- */
+  /* ---------- Поиск слов ----------
+     Возвращает только САМОЕ ДЛИННОЕ слово из каждой непрерывной цепочки
+     в каждом направлении. Если КОТ расширен до КОТЫ — засчитается КОТЫ.
+     Горизонталь и вертикаль — независимые цепочки. */
   function findWords(level){
     var vecs = getDirVectors(level);
     var result = [];
     var seen = Object.create(null);
+
     for (var r=0;r<N;r++){
       for (var c=0;c<N;c++){
         if (!board[r][c]) continue;
+
         for (var vi=0; vi<vecs.length; vi++){
           var dr = vecs[vi][0], dc = vecs[vi][1];
+
+          // Начинаем слово только с "края" цепочки:
+          // клетка перед нами (против направления) должна быть пустой/вне поля.
           var pr = r - dr, pc = c - dc;
           if (pr >= 0 && pr < N && pc >= 0 && pc < N && board[pr][pc]) continue;
+
+          // Идём вдоль направления, запоминаем самое длинное найденное слово.
           var word = '';
           var cells = [];
+          var longest = null;
           var rr = r, cc = c;
           while (rr >= 0 && rr < N && cc >= 0 && cc < N && board[rr][cc]){
-            word += board[rr][cc].letter;
+            var next = word + board[rr][cc].letter;
+            if (!trie.hasPrefix(next)) break;
+            word = next;
             cells.push([rr, cc]);
             if (word.length >= CONFIG.MIN_WORD_LEN && trie.has(word)){
-              var key = cells[0][0] + ',' + cells[0][1] + '|' + word;
-              if (!seen[key]){
-                seen[key] = 1;
-                result.push({ word: word, cells: cells.slice() });
-              }
+              longest = { word: word, cells: cells.slice() };
             }
-            if (!trie.hasPrefix(word)) break;
             rr += dr; cc += dc;
+          }
+
+          if (longest){
+            var key = r + ',' + c + '|' + dr + ',' + dc;
+            if (!seen[key]){
+              seen[key] = 1;
+              result.push(longest);
+            }
           }
         }
       }
@@ -490,10 +506,12 @@ window.onerror = function(msg, url, line, col){
     board[p.row][p.col] = { letter: p.letter, id: nextCellId++ };
     G.piece = null;
     Audio8.lock();
-    setTimeout(function(){ if (G.state === 'PLAYING' && !G.busy) refreshHighlight(); }, 180);
+    refreshHighlight();          // сразу, без задержки
     spawnPiece();
   }
-  function refreshHighlight(){ G.highlight = findWords(G.level); }
+  function refreshHighlight(){
+    G.highlight = findWords(G.level);
+  }
   function moveHorizontal(dir){
     if (G.state !== 'PLAYING' || !G.piece || G.busy) return;
     var nc = G.piece.col + dir;
@@ -512,6 +530,7 @@ window.onerror = function(msg, url, line, col){
   }
   function doGO(){
     if (G.state !== 'PLAYING' || G.busy) return;
+    // всегда пересчитываем на актуальном поле
     var words = findWords(G.level);
     if (words.length === 0){ toast('НЕТ СЛОВ'); return; }
     Audio8.go();
@@ -691,6 +710,13 @@ window.onerror = function(msg, url, line, col){
     render();
     requestAnimationFrame(loop);
   }
+
+  /* ---------- Постоянное обновление подсветки ---------- */
+  setInterval(function(){
+    if (G.state === 'PLAYING' && !G.busy){
+      refreshHighlight();
+    }
+  }, CONFIG.HIGHLIGHT_REFRESH_MS);
 
   /* ---------- Старт ---------- */
   function boot(){
