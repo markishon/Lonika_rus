@@ -1,6 +1,8 @@
 /* =====================================================================
-   ЛОНИКА — движок v4
-   Ё=Е, новая частотная матрица, бонусы ×5 и ×10, уровни каждые 3000
+   ЛОНИКА — движок v5
+   Ё=Е · популярные 90% / непопулярные 9.5% / знаки 0.5%
+   бонусы ×5 и ×10 · уровень каждые 3000 очков · ускорение +10%
+   анимации ускорены на 30%
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -23,14 +25,14 @@ window.onerror = function(msg, url, line, col){
     N: 11,
     SPAWN_COL: 5,
     BASE_INTERVAL: 1440,
-    SPEED_FACTOR: 1.2,
-    MAX_SPEED_LEVEL: 15,          // после этого интервал не уменьшается
+    SPEED_FACTOR: 1.1,            // +10% за уровень
+    MAX_SPEED_LEVEL: 15,
     MIN_WORD_LEN: 3,
     SCORE_MULT: 10,
     MAX_SCORE: 1000000,
     COMBO: { 1:1, 2:1.2, 3:1.5, 4:2, 5:3 },
 
-    LEVEL_STEP: 3000,             // 1 уровень = 3000 очков
+    LEVEL_STEP: 3000,
 
     DIR_GROUPS: [
       { max: 4,     dirs: ['left','right','up','down'] },
@@ -39,21 +41,20 @@ window.onerror = function(msg, url, line, col){
       { max: 99999, dirs: ['right'] }
     ],
 
-    /* Веса букв, сумма = 10000 (шаг ×100).
-       Популярная группа: 8000 = 80%
-       Непопулярная:      1900 = 19%
-       Знаки:              100 =  1% */
+    /* Сумма = 10000 (шаг ×100).
+       Популярные:  9000 = 90%
+       Непопулярные: 950 = 9.5%
+       Знаки:         50 = 0.5% */
     LETTER_WEIGHTS: {
-      // популярные (80%)
+      // популярные (90%)
       'а':1100,'е':800,'о':800,'и':700,'н':600,'т':500,
-      'у':300,'я':200,
-      'б':300,'в':300,'г':300,'д':300,'к':300,'л':300,
-      'м':300,'п':300,'р':300,'с':300,
-      // непопулярные (19%)
-      'ы':200,'э':200,'ю':200,'з':200,'й':200,
-      'ф':150,'х':200,'ц':150,'ч':200,'ш':100,'щ':100,
-      // знаки (1%)
-      'ь':90,'ъ':10
+      'у':375,'я':375,'б':375,'в':375,'г':375,'д':375,
+      'к':375,'л':375,'м':375,'п':375,'р':375,'с':375,
+      // непопулярные (9.5%)
+      'ы':87,'э':87,'ю':87,'з':87,
+      'й':86,'ф':86,'х':86,'ц':86,'ч':86,'ш':86,'щ':86,
+      // знаки (0.5%)
+      'ь':45,'ъ':5
     },
 
     UNPOPULAR: ['ы','э','ю','з','й','ф','х','ц','ч','ш','щ'],
@@ -63,7 +64,7 @@ window.onerror = function(msg, url, line, col){
     BONUS_SIGN:      10,
 
     SOFT_DROP: 0.06,
-    HIGHLIGHT_REFRESH_MS: 200
+    HIGHLIGHT_REFRESH_MS: 140     // было 200 — сокращено на 30%
   };
 
   /* ---------- Производные структуры ---------- */
@@ -134,7 +135,6 @@ window.onerror = function(msg, url, line, col){
     if (n >= 2 && typeHistory[n-1] === typeHistory[n-2]){
       return typeHistory[n-1] === 'v' ? 'c' : 'v';
     }
-    // 55% согласных / 45% гласных — компромисс между частотой и играбельностью
     return Math.random() < 0.55 ? 'c' : 'v';
   }
   function recordType(t){
@@ -406,15 +406,12 @@ window.onerror = function(msg, url, line, col){
     ctx.closePath();
   }
 
-  // tier: 1 = обычная, 5 = ×5, 10 = ×10
   function paletteFor(tier, mode){
-    // mode: 'fixed' | 'falling'
     if (mode === 'falling'){
       if (tier >= 10) return ['#ff9ea8', '#d02040'];
       if (tier >= 5)  return ['#c8a0ff', '#7c2ecc'];
       return ['#7cc0ff', '#4a6cf7'];
     }
-    // fixed (зафиксированные клетки без подсветки — серо-синие)
     if (tier >= 10) return ['#6a4048', '#3a1520'];
     if (tier >= 5)  return ['#5a4078', '#2e1a4a'];
     return ['#4b5d95', '#2b3560'];
@@ -457,7 +454,6 @@ window.onerror = function(msg, url, line, col){
     roundRect(pad, pad, s, s, r);
     ctx.fill();
 
-    // обводка и свечение
     ctx.strokeStyle = opts.highlight ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.12)';
     ctx.lineWidth = 1;
     ctx.stroke();
@@ -472,7 +468,6 @@ window.onerror = function(msg, url, line, col){
       ctx.shadowBlur = 0;
     }
 
-    // буква
     ctx.fillStyle = opts.highlight ? (tier >= 5 ? '#2a0030' : '#2a1a00') : '#ffffff';
     ctx.font = '800 ' + (cellSize * 0.52) + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -491,7 +486,6 @@ window.onerror = function(msg, url, line, col){
       ctx.beginPath(); ctx.moveTo(0, i*cellSize); ctx.lineTo(boardPx, i*cellSize); ctx.stroke();
     }
 
-    // карта подсветки: cellKey -> tier (высший бонус побеждает)
     var hl = Object.create(null);
     for (var hi=0; hi<G.highlight.length; hi++){
       var hw = G.highlight[hi];
@@ -728,7 +722,6 @@ window.onerror = function(msg, url, line, col){
     Audio8.go();
     var gain = scoreWords(words);
 
-    // максимальный бонус среди найденных слов
     var maxBonus = 1;
     for (var mb=0; mb<words.length; mb++){
       if (words[mb].bonus > maxBonus) maxBonus = words[mb].bonus;
@@ -736,7 +729,6 @@ window.onerror = function(msg, url, line, col){
     if (maxBonus >= 10) Audio8.superBonus();
     else if (maxBonus >= 5) Audio8.bonus();
 
-    // всплывающее сообщение
     if (maxBonus >= 10){
       toast('БОНУС ×' + maxBonus + '  +' + gain, 1500, '#ff8aa6');
     } else if (maxBonus >= 5){
@@ -759,7 +751,7 @@ window.onerror = function(msg, url, line, col){
     }
     G.highlight = words;
     G.busy = true;
-    G.phase = { type: 'delete', start: performance.now(), dur: 220 };
+    G.phase = { type: 'delete', start: performance.now(), dur: 155 };   // было 220
 
     setTimeout(function(){
       Audio8.score();
@@ -782,7 +774,7 @@ window.onerror = function(msg, url, line, col){
       }
 
       G.fallMoves = applyGravity();
-      G.phase = { type: 'fall', start: performance.now(), dur: 240 };
+      G.phase = { type: 'fall', start: performance.now(), dur: 170 };   // было 240
       setTimeout(function(){
         G.phase = null;
         G.fallMoves = [];
@@ -790,8 +782,8 @@ window.onerror = function(msg, url, line, col){
         G.busy = false;
         refreshHighlight();
         if (G.score >= CONFIG.MAX_SCORE) victory();
-      }, 240);
-    }, 220);
+      }, 170);
+    }, 155);
   }
   function applyGravity(){
     var moves = [];
