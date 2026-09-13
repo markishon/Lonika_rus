@@ -807,7 +807,7 @@ window.onerror = function(msg, url, line, col){
     G.state = 'GAMEOVER';
     Audio8.gameover();
     showOverlay('<h1>ИГРА ОКОНЧЕНА</h1>' +
-      '<p>Новый кубик не может появиться в центральной колонке.</p>' +
+      '<p>Отлично получается, попробуй ещё раз!</p>' +
       '<p style="color:#fff;font-size:20px;font-weight:800">СЧЁТ: ' +
       G.score.toLocaleString('ru-RU') + '</p>' +
       '<p style="color:#a8b6d4;font-size:14px">УРОВЕНЬ: ' + G.level + '</p>' +
