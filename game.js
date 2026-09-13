@@ -1,8 +1,7 @@
 /* =====================================================================
-   ЛОНИКА — движок v5
-   Ё=Е · популярные 90% / непопулярные 9.5% / знаки 0.5%
-   бонусы ×5 и ×10 · уровень каждые 3000 очков · ускорение +10%
-   анимации ускорены на 30%
+   ЛОНИКА — движок v6
+   + пауза 1 сек при повышении уровня
+   + новый текст в Game Over
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -25,7 +24,7 @@ window.onerror = function(msg, url, line, col){
     N: 11,
     SPAWN_COL: 5,
     BASE_INTERVAL: 1440,
-    SPEED_FACTOR: 1.1,            // +10% за уровень
+    SPEED_FACTOR: 1.1,
     MAX_SPEED_LEVEL: 15,
     MIN_WORD_LEN: 3,
     SCORE_MULT: 10,
@@ -33,6 +32,7 @@ window.onerror = function(msg, url, line, col){
     COMBO: { 1:1, 2:1.2, 3:1.5, 4:2, 5:3 },
 
     LEVEL_STEP: 3000,
+    LEVELUP_PAUSE_MS: 1000,       // пауза между уровнями
 
     DIR_GROUPS: [
       { max: 4,     dirs: ['left','right','up','down'] },
@@ -41,19 +41,12 @@ window.onerror = function(msg, url, line, col){
       { max: 99999, dirs: ['right'] }
     ],
 
-    /* Сумма = 10000 (шаг ×100).
-       Популярные:  9000 = 90%
-       Непопулярные: 950 = 9.5%
-       Знаки:         50 = 0.5% */
     LETTER_WEIGHTS: {
-      // популярные (90%)
       'а':1100,'е':800,'о':800,'и':700,'н':600,'т':500,
       'у':375,'я':375,'б':375,'в':375,'г':375,'д':375,
       'к':375,'л':375,'м':375,'п':375,'р':375,'с':375,
-      // непопулярные (9.5%)
       'ы':87,'э':87,'ю':87,'з':87,
       'й':86,'ф':86,'х':86,'ц':86,'ч':86,'ш':86,'щ':86,
-      // знаки (0.5%)
       'ь':45,'ъ':5
     },
 
@@ -64,10 +57,9 @@ window.onerror = function(msg, url, line, col){
     BONUS_SIGN:      10,
 
     SOFT_DROP: 0.06,
-    HIGHLIGHT_REFRESH_MS: 140     // было 200 — сокращено на 30%
+    HIGHLIGHT_REFRESH_MS: 140
   };
 
-  /* ---------- Производные структуры ---------- */
   var LETTER_BONUS = Object.create(null);
   (function(){
     for (var ch in CONFIG.LETTER_WEIGHTS) LETTER_BONUS[ch] = 1;
@@ -119,7 +111,7 @@ window.onerror = function(msg, url, line, col){
 
   /* ---------- Генератор букв ---------- */
   var ALL_LETTERS = Object.keys(CONFIG.LETTER_WEIGHTS);
-  var VOWELS_SET = { 'а':1,'е':1,'и':1,'о':1,'у':1,'ы':1,'э':1,'ю':1,'я':1 }; // без ё
+  var VOWELS_SET = { 'а':1,'е':1,'и':1,'о':1,'у':1,'ы':1,'э':1,'ю':1,'я':1 };
   var VOWEL_LIST = [], CONSONANT_LIST = [];
   for (var li=0; li<ALL_LETTERS.length; li++){
     if (VOWELS_SET[ALL_LETTERS[li]]) VOWEL_LIST.push(ALL_LETTERS[li]);
@@ -655,7 +647,7 @@ window.onerror = function(msg, url, line, col){
     levelupTimer = setTimeout(function(){
       el2.style.opacity = '0';
       el2.style.transform = 'translate(-50%,-50%) scale(0.9)';
-    }, 1400);
+    }, 1800);
   }
 
   el.overlay.addEventListener('pointerdown', function(e){
@@ -751,7 +743,7 @@ window.onerror = function(msg, url, line, col){
     }
     G.highlight = words;
     G.busy = true;
-    G.phase = { type: 'delete', start: performance.now(), dur: 155 };   // было 220
+    G.phase = { type: 'delete', start: performance.now(), dur: 155 };
 
     setTimeout(function(){
       Audio8.score();
@@ -765,7 +757,8 @@ window.onerror = function(msg, url, line, col){
       var newLv = levelForScore(G.score);
       updateUI();
 
-      if (newLv > oldLv){
+      var leveledUp = newLv > oldLv;
+      if (leveledUp){
         G.level = newLv;
         Audio8.levelup();
         updateUI();
@@ -774,7 +767,11 @@ window.onerror = function(msg, url, line, col){
       }
 
       G.fallMoves = applyGravity();
-      G.phase = { type: 'fall', start: performance.now(), dur: 170 };   // было 240
+      G.phase = { type: 'fall', start: performance.now(), dur: 170 };
+
+      // при повышении уровня — дополнительная пауза после осыпания
+      var releaseDelay = 170 + (leveledUp ? CONFIG.LEVELUP_PAUSE_MS : 0);
+
       setTimeout(function(){
         G.phase = null;
         G.fallMoves = [];
@@ -782,7 +779,7 @@ window.onerror = function(msg, url, line, col){
         G.busy = false;
         refreshHighlight();
         if (G.score >= CONFIG.MAX_SCORE) victory();
-      }, 170);
+      }, releaseDelay);
     }, 155);
   }
   function applyGravity(){
@@ -920,7 +917,6 @@ window.onerror = function(msg, url, line, col){
     requestAnimationFrame(loop);
   }
 
-  /* ---------- Постоянное обновление подсветки ---------- */
   setInterval(function(){
     if (G.state === 'PLAYING' && !G.busy){
       refreshHighlight();
