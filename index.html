@@ -5,46 +5,92 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>ЛОНИКА</title>
 <style>
+  :root{
+    --bg-grad-top:#131a2e;
+    --bg-grad-bottom:#0a0f1c;
+    --board-bg:#1a2138;
+    --board-border:#2a3354;
+    --cell-empty:#232b47;
+    --cell-edge:#2f3858;
+    --text:#ffffff;
+    --text-dim:#8fa3c8;
+    --text-label:#5a6b8f;
+    --key-top:#f7f9ff;
+    --key-bottom:#dbe3f4;
+    --key-edge:#c4cde0;
+    --key-shadow:#8b96b3;
+    --key-letter:#1e2a4a;
+    --go-top:#ffd66b;
+    --go-bottom:#f0a83a;
+    --go-edge:#e0a83a;
+    --go-shadow:#a06f18;
+    --go-letter:#3a2400;
+    --radius-key:14px;
+    --radius-board:20px;
+    --radius-pill:999px;
+  }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
-  html,body{margin:0;padding:0;height:100%;background:#0b1020;color:#e8eefc;
+  html,body{margin:0;padding:0;height:100%;color:var(--text);
+    background:radial-gradient(ellipse at top, var(--bg-grad-top) 0%, var(--bg-grad-bottom) 70%);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden}
   #app{display:flex;flex-direction:column;align-items:center;height:100vh;height:100dvh;padding:8px;gap:8px}
   header{display:flex;justify-content:space-between;width:100%;max-width:560px;padding:0 6px}
-  .stat{display:flex;flex-direction:column;font-size:11px;letter-spacing:2px;color:#8fa3c8}
-  .stat b{font-size:22px;font-weight:800;color:#fff;letter-spacing:0;font-variant-numeric:tabular-nums;line-height:1.1}
-  #dirs{font-size:15px;letter-spacing:5px;color:#3d4a68;margin-top:3px;line-height:1;font-weight:700}
+  .stat{display:flex;flex-direction:column;font-size:11px;letter-spacing:3px;
+    color:var(--text-dim);text-transform:uppercase}
+  .stat b{display:block;margin-top:4px;font-size:26px;font-weight:900;letter-spacing:0;
+    color:var(--text);font-variant-numeric:tabular-nums;line-height:1.05}
+  #dirs{font-size:13px;letter-spacing:3px;color:var(--text-label);margin-top:4px;line-height:1;font-weight:700}
+  #dirs span{color:#2a3354}
   #dirs span.on{color:#7cc0ff}
   #stage{position:relative}
-  canvas{display:block;border-radius:16px;background:linear-gradient(160deg,#141a33,#0d1226);
-    box-shadow:0 12px 40px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.05)}
-  #previews{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:2px;color:#8fa3c8}
-  #previews .pv{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;
-    background:linear-gradient(160deg,#2b3560,#1b2244);color:#fff;font-weight:800;font-size:16px;
-    box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+  canvas{display:block;border-radius:var(--radius-board);
+    background:var(--board-bg);border:1px solid var(--board-border);
+    box-shadow:0 20px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04)}
+  #previews{display:flex;align-items:center;gap:10px;font-size:11px;letter-spacing:3px;
+    color:var(--text-dim);text-transform:uppercase}
+  #previews .pv{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;
+    justify-content:center;font-weight:800;font-size:18px;
+    background:linear-gradient(to bottom,#ffffff,#dfe4ef);color:#1e2a4a;
+    box-shadow:0 3px 0 #9aa5bf, 0 6px 12px rgba(0,0,0,.3)}
   #controls{display:flex;justify-content:space-between;width:100%;max-width:560px;padding:0 6px;gap:12px}
   .grp{display:flex;gap:12px}
-  .key{width:64px;height:64px;border-radius:14px;border:1px solid #cfd8e8;background:linear-gradient(#f7f9ff,#dbe3f4);
-    color:#1a2440;font-size:26px;font-weight:800;display:flex;align-items:center;justify-content:center;
-    box-shadow:0 4px 0 #9aa8c6,0 6px 14px rgba(0,0,0,.35);cursor:pointer;transition:transform .05s,box-shadow .05s}
-  .key:active{transform:translateY(3px);box-shadow:0 1px 0 #9aa8c6,0 3px 8px rgba(0,0,0,.35)}
-  .key.go{background:linear-gradient(#ffd66b,#f0a83a);color:#3a2400;font-size:18px;letter-spacing:1px;
-    border-color:#e0a83a;box-shadow:0 4px 0 #a06f18,0 6px 14px rgba(0,0,0,.35)}
-  .key.go:active{box-shadow:0 1px 0 #a06f18,0 3px 8px rgba(0,0,0,.35)}
+  .key{width:66px;height:66px;border-radius:var(--radius-key);
+    border:1px solid var(--key-edge);
+    background:linear-gradient(to bottom, var(--key-top), var(--key-bottom));
+    color:var(--key-letter);font-size:26px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    box-shadow:0 4px 0 var(--key-shadow), 0 8px 18px rgba(0,0,0,.35);
+    transition:transform .06s ease, box-shadow .06s ease;
+    -webkit-appearance:none;appearance:none;padding:0}
+  .key:active{transform:translateY(3px);
+    box-shadow:0 1px 0 var(--key-shadow), 0 4px 10px rgba(0,0,0,.35)}
+  .key.go{background:linear-gradient(to bottom, var(--go-top), var(--go-bottom));
+    border-color:var(--go-edge);color:var(--go-letter);
+    font-size:19px;letter-spacing:1px;
+    box-shadow:0 4px 0 var(--go-shadow), 0 8px 18px rgba(0,0,0,.35)}
+  .key.go:active{box-shadow:0 1px 0 var(--go-shadow), 0 4px 10px rgba(0,0,0,.35)}
   @media (max-width:480px){.key{width:60px;height:60px}}
-  #overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
-    background:rgba(8,12,26,.82);border-radius:16px;text-align:center;padding:24px;gap:14px;backdrop-filter:blur(6px);
-    cursor:pointer}
+  #overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
+    justify-content:center;background:rgba(8,12,26,.88);border-radius:var(--radius-board);
+    text-align:center;padding:24px;gap:14px;backdrop-filter:blur(8px);cursor:pointer;z-index:10}
   #overlay.on{display:flex}
-  #overlay h1{margin:0;font-size:34px;letter-spacing:6px;background:linear-gradient(90deg,#7cc0ff,#c88bff,#ffb86b);
+  #overlay h1{margin:0;font-size:38px;letter-spacing:8px;
+    background:linear-gradient(90deg,#7cc0ff,#c88bff,#ffb86b);
     -webkit-background-clip:text;background-clip:text;color:transparent}
-  #overlay p{margin:0;color:#a8b6d4;font-size:14px;max-width:320px;line-height:1.5}
-  #overlay button{margin-top:6px;padding:12px 24px;border-radius:12px;border:0;cursor:pointer;font-weight:800;
-    font-size:16px;letter-spacing:1px;background:linear-gradient(#ffd66b,#f0a83a);color:#3a2400;
-    box-shadow:0 4px 0 #a06f18}
-  #overlay button:active{transform:translateY(3px);box-shadow:0 1px 0 #a06f18}
-  #toast{position:absolute;left:50%;top:14%;transform:translateX(-50%);padding:8px 16px;border-radius:10px;
-    background:rgba(0,0,0,.7);color:#ffd66b;font-weight:700;letter-spacing:2px;font-size:13px;opacity:0;
-    transition:opacity .2s;pointer-events:none}
+  #overlay p{margin:0;color:var(--text-dim);font-size:14px;max-width:340px;line-height:1.5}
+  #overlay button{margin-top:8px;padding:14px 32px;border-radius:var(--radius-pill);
+    border:0;cursor:pointer;font-weight:900;font-size:17px;letter-spacing:1.5px;
+    background:linear-gradient(to bottom, var(--go-top), var(--go-bottom));
+    color:var(--go-letter);
+    box-shadow:0 4px 0 var(--go-shadow), 0 8px 18px rgba(0,0,0,.35);
+    transition:transform .06s ease, box-shadow .06s ease}
+  #overlay button:active{transform:translateY(3px);
+    box-shadow:0 1px 0 var(--go-shadow), 0 4px 10px rgba(0,0,0,.35)}
+  #toast{position:absolute;left:50%;top:14%;transform:translateX(-50%);
+    padding:10px 20px;border-radius:var(--radius-pill);
+    background:rgba(0,0,0,.75);color:var(--go-top);
+    font-weight:800;letter-spacing:2px;font-size:15px;
+    opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
   #toast.on{opacity:1}
 </style>
 </head>
@@ -61,7 +107,7 @@
     <div id="overlay"></div>
     <div id="toast"></div>
   </div>
-  <div id="previews"><span>ДАЛЕЕ</span><div class="pv" id="pv0">·</div><div class="pv" id="pv1">·</div></div>
+  <div id="previews"><span>Далее</span><div class="pv" id="pv0">·</div><div class="pv" id="pv1">·</div></div>
   <div id="controls">
     <div class="grp">
       <button class="key" data-act="left">←</button>
