@@ -1,7 +1,9 @@
 /* =====================================================================
-   ЛОНИКА — движок v6
-   + пауза 1 сек при повышении уровня
-   + новый текст в Game Over
+   ЛОНИКА — движок v8
+   + дизайн в стиле Words of Wonders (светлые плитки, 3D-тень)
+   + 8 направлений, диагонали с 9 уровня
+   + комбо = количество найденных слов
+   + бонусы ×5 / ×10 за редкие буквы
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -29,16 +31,19 @@ window.onerror = function(msg, url, line, col){
     MIN_WORD_LEN: 3,
     SCORE_MULT: 10,
     MAX_SCORE: 1000000,
-    COMBO: { 1:1, 2:1.2, 3:1.5, 4:2, 5:3 },
 
     LEVEL_STEP: 3000,
-    LEVELUP_PAUSE_MS: 1000,       // пауза между уровнями
+    LEVELUP_PAUSE_MS: 1000,
 
     DIR_GROUPS: [
-      { max: 4,     dirs: ['left','right','up','down'] },
-      { max: 9,     dirs: ['right','up','down'] },
-      { max: 19,    dirs: ['right','down'] },
-      { max: 99999, dirs: ['right'] }
+      { max: 2,     dirs: ['right'] },
+      { max: 4,     dirs: ['right','left'] },
+      { max: 6,     dirs: ['right','left','up'] },
+      { max: 8,     dirs: ['right','left','up','down'] },
+      { max: 10,    dirs: ['right','left','up','down','upRight'] },
+      { max: 12,    dirs: ['right','left','up','down','upRight','downRight'] },
+      { max: 14,    dirs: ['right','left','up','down','upRight','downRight','upLeft'] },
+      { max: 99999, dirs: ['right','left','up','down','upRight','downRight','upLeft','downLeft'] }
     ],
 
     LETTER_WEIGHTS: {
@@ -63,7 +68,8 @@ window.onerror = function(msg, url, line, col){
   var LETTER_BONUS = Object.create(null);
   (function(){
     for (var ch in CONFIG.LETTER_WEIGHTS) LETTER_BONUS[ch] = 1;
-    for (var i=0;i<CONFIG.UNPOPULAR.length;i++) LETTER_BONUS[CONFIG.UNPOPULAR[i]] = CONFIG.BONUS_UNPOPULAR;
+    for (var i=0;i<CONlevelFIG.UNPOPULAR.length;i++)){
+ LETTER_BONUS[CONFIG.UNPOP   ULAR[i]] = CONFIG.BON forUS_UNPOPULAR;
     for (var j=0;j<CONFIG.SIGNS.length;j++)     LETTER_BONUS[CONFIG.SIGNS[j]]     = CONFIG.BONUS_SIGN;
   })();
 
@@ -177,8 +183,7 @@ window.onerror = function(msg, url, line, col){
   function canMoveTo(c,r){ return r<N && canPlace(r,c); }
 
   /* ---------- Направления ---------- */
-  function getDirs(level){
-    for (var i=0;i<CONFIG.DIR_GROUPS.length;i++){
+  function getDirs( (var i=0;i<CONFIG.DIR_GROUPS.length;i++){
       if (level <= CONFIG.DIR_GROUPS[i].max) return CONFIG.DIR_GROUPS[i].dirs;
     }
     return ['right'];
@@ -186,10 +191,14 @@ window.onerror = function(msg, url, line, col){
   function getDirVectors(level){
     var v = [];
     var d = getDirs(level);
-    if (d.indexOf('right') >= 0) v.push([0, 1]);
-    if (d.indexOf('left')  >= 0) v.push([0,-1]);
-    if (d.indexOf('down')  >= 0) v.push([1, 0]);
-    if (d.indexOf('up')    >= 0) v.push([-1,0]);
+    if (d.indexOf('right')     >= 0) v.push([0, 1]);
+    if (d.indexOf('left')      >= 0) v.push([0,-1]);
+    if (d.indexOf('up')        >= 0) v.push([-1,0]);
+    if (d.indexOf('down')      >= 0) v.push([1, 0]);
+    if (d.indexOf('upRight')   >= 0) v.push([-1,1]);
+    if (d.indexOf('downRight') >= 0) v.push([1, 1]);
+    if (d.indexOf('upLeft')    >= 0) v.push([-1,-1]);
+    if (d.indexOf('downLeft')  >= 0) v.push([1, -1]);
     return v;
   }
 
@@ -253,11 +262,8 @@ window.onerror = function(msg, url, line, col){
     return true;
   }
 
-  /* ---------- Очки ---------- */
-  function comboFor(n){
-    if (n >= 5) return CONFIG.COMBO[5];
-    return CONFIG.COMBO[n] || 1;
-  }
+  /* ---------- Очки ----------
+     score = Σ(длина² × 10 × буквенный_бонус) × количество_слов */
   function scoreWords(words){
     var sum = 0;
     for (var i=0;i<words.length;i++){
@@ -265,7 +271,7 @@ window.onerror = function(msg, url, line, col){
       var len = w.word.length;
       sum += len * len * CONFIG.SCORE_MULT * w.bonus;
     }
-    return Math.round(sum * comboFor(words.length));
+    return Math.round(sum * words.length);
   }
 
   /* ---------- Уровни ---------- */
@@ -369,10 +375,11 @@ window.onerror = function(msg, url, line, col){
   var lastFrameTs = performance.now();
 
   function resize(){
-    var controlsEl = document.getElementById('controls');
-    var previewsEl = document.getElementById('previews');
-    var headerEl = document.querySelector('header');
-    var controlsH = controlsEl ? controlsEl.offsetHeight : 80;
+    var controlsEl = document0.getElementById('controls');
+    var previewsEl = document.getElementById){
+('previews');
+    var headerEl = document.querySelector('header     ');
+    var controlsH = controlsEl ? controlsEl. eloffsetHeight : 80;
     var previewsH = previewsEl ? previewsEl.offsetHeight : 40;
     var headerH = headerEl ? headerEl.offsetHeight : 50;
     var availW = Math.min(window.innerWidth - 24, 560);
@@ -398,21 +405,24 @@ window.onerror = function(msg, url, line, col){
     ctx.closePath();
   }
 
-  function paletteFor(tier, mode){
-    if (mode === 'falling'){
-      if (tier >= 10) return ['#ff9ea8', '#d02040'];
-      if (tier >= 5)  return ['#c8a0ff', '#7c2ecc'];
-      return ['#7cc0ff', '#4a6cf7'];
+  // Возвращает {top, bottom, edge, shadow, letter} для плитки
+  function tilePalette(tier, mode){
+    if (mode === 'highlight'){
+      if (tier >= 10) return { top:'#ffb0c0', bottom:'#e02050', edge:'#a0103a', shadow:'#7a0a2a', letter:'#3a0018' };
+      if (tier >= 5)  return { top:'#dfb0ff', bottom:'#a94cff', edge:'#6f1fbf', shadow:'#4f108f', letter:'#2a0040' };
+      return                 { top:'#ffe28a', bottom:'#f7a93c', edge:'#c67d18', shadow:'#8f5608', letter:'#3a2400' };
     }
-    if (tier >= 10) return ['#6a4048', '#3a1520'];
-    if (tier >= 5)  return ['#5a4078', '#2e1a4a'];
-    return ['#4b5d95', '#2b3560'];
+    if (mode === 'falling'){
+      if (tier >= 10) return { top:'#ff9ea8', bottom:'#d02040', edge:'#a01030', shadow:'#7a0828', letter:'#ffffff' };
+      if (tier >= 5)  return { top:'#c8a0ff', bottom:'#7c2ecc', edge:'#5a1a9a', shadow:'#3a0e6a', letter:'#ffffff' };
+      return                 { top:'#7cc0ff', bottom:'#4a6cf7', edge:'#2c46b8', shadow:'#1c2c8a', letter:'#ffffff' };
+    }
+    // fixed (без подсветки)
+    if (tier >= 10) return { top:'#6a4048', bottom:'#3a1520', edge:'#2a0e18', shadow:'#180810', letter:'#ffffff' };
+    if (tier >= 5)  return { top:'#5a4078', bottom:'#2e1a4a', edge:'#1f1233', shadow:'#130a22', letter:'#ffffff' };
+    return                 { top:'#ffffff', bottom:'#dfe4ef', edge:'#c8cfdf', shadow:'#9aa5bf', letter:'#1e2a4a' };
   }
-  function paletteForHighlight(tier){
-    if (tier >= 10) return ['#ffb0c0', '#e02050'];
-    if (tier >= 5)  return ['#dfb0ff', '#8030d0'];
-    return ['#ffe28a', '#f7a93c'];
-  }
+
   function glowColorFor(tier){
     if (tier >= 10) return '#ff5070';
     if (tier >= 5)  return '#c88bff';
@@ -427,40 +437,49 @@ window.onerror = function(msg, url, line, col){
     var alpha = opts.alpha != null ? opts.alpha : 1;
     var scale = opts.scale != null ? opts.scale : 1;
     var ox = x + cellSize/2, oy = y + cellSize/2;
+    var tier = opts.tier || 1;
+
+    var mode = opts.highlight ? 'highlight' : (opts.falling ? 'falling' : 'fixed');
+    var pal = tilePalette(tier, mode);
+    var shadowH = s * 0.10;
+
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(ox, oy);
     ctx.scale(scale, scale);
     ctx.translate(-cellSize/2, -cellSize/2);
 
-    var tier = opts.tier || 1;
-    var colors;
-    if (opts.highlight) colors = paletteForHighlight(tier);
-    else if (opts.falling) colors = paletteFor(tier, 'falling');
-    else colors = paletteFor(tier, 'fixed');
+    // тень-основание под плиткой (имитация 3D)
+    ctx.fillStyle = pal.shadow;
+    roundRect(pad, pad + shadowH, s, s, r);
+    ctx.fill();
 
-    var g = ctx.createLinearGradient(0, 0, 0, cellSize);
-    g.addColorStop(0, colors[0]);
-    g.addColorStop(1, colors[1]);
+    // сама плитка (градиент сверху вниз)
+    var g = ctx.createLinearGradient(0, pad, 0, pad + s);
+    g.addColorStop(0, pal.top);
+    g.addColorStop(1, pal.bottom);
     ctx.fillStyle = g;
     roundRect(pad, pad, s, s, r);
     ctx.fill();
 
-    ctx.strokeStyle = opts.highlight ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.12)';
+    // тонкая обводка
+    ctx.strokeStyle = pal.edge;
     ctx.lineWidth = 1;
     ctx.stroke();
 
+    // свечение для подсветки
     if (opts.highlight){
       var glow = glowColorFor(tier);
       ctx.shadowColor = glow;
-      ctx.shadowBlur = tier >= 10 ? 28 : (tier >= 5 ? 24 : 18);
-      ctx.strokeStyle = 'rgba(255,255,255,.95)';
-      ctx.lineWidth = 2.5;
+      ctx.shadowBlur = tier >= 10 ? 26 : (tier >= 5 ? 22 : 16);
+      ctx.strokeStyle = 'rgba(255,255,255,.9)';
+      ctx.lineWidth = 2;
       ctx.stroke();
       ctx.shadowBlur = 0;
     }
 
-    ctx.fillStyle = opts.highlight ? (tier >= 5 ? '#2a0030' : '#2a1a00') : '#ffffff';
+    // буква
+    ctx.fillStyle = pal.letter;
     ctx.font = '800 ' + (cellSize * 0.52) + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(letter, cellSize/2, cellSize/2 + 1);
@@ -468,16 +487,32 @@ window.onerror = function(msg, url, line, col){
   }
 
   function render(){
-    ctx.clearRect(0, 0, boardPx, boardPx);
-    ctx.fillStyle = 'rgba(255,255,255,0.02)';
+    // фон поля
+    ctx.fillStyle = '#1a2138';
     ctx.fillRect(0, 0, boardPx, boardPx);
-    ctx.strokeStyle = 'rgba(255,255,255,0.045)';
+
+    // пустые клетки — тёмные прямоугольники с отступом
+    var pad = cellSize * 0.06;
+    var s = cellSize - pad * 2;
+    var r = s * 0.22;
+    for (var rr0=0; rr0<N; rr0++){
+      for (var cc0=0; cc0<N; cc0++){
+        if (board[rr0][cc0]) continue;
+        ctx.fillStyle = '#232b47';
+        roundRect(cc0*cellSize + pad, rr0*cellSize + pad, s, s, r);
+        ctx.fill();
+      }
+    }
+
+    // сетка (тонкие линии по краям клеток)
+    ctx.strokeStyle = '#2f3858';
     ctx.lineWidth = 1;
     for (var i=1; i<N; i++){
       ctx.beginPath(); ctx.moveTo(i*cellSize, 0); ctx.lineTo(i*cellSize, boardPx); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, i*cellSize); ctx.lineTo(boardPx, i*cellSize); ctx.stroke();
     }
 
+    // карта подсветки
     var hl = Object.create(null);
     for (var hi=0; hi<G.highlight.length; hi++){
       var hw = G.highlight[hi];
@@ -489,6 +524,7 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
+    // анимация удаления
     var delSet = Object.create(null);
     var now = performance.now();
     if (G.phase && G.phase.type === 'delete'){
@@ -497,6 +533,7 @@ window.onerror = function(msg, url, line, col){
         delSet[G.deleting[dI].r*N + G.deleting[dI].c] = dt1;
       }
     }
+    // анимация падения
     var fallMap = Object.create(null);
     if (G.phase && G.phase.type === 'fall'){
       var dt2 = Math.min(1, (now - G.phase.start) / G.phase.dur);
@@ -507,6 +544,7 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
+    // зафиксированные буквы
     for (var r=0;r<N;r++){
       for (var c=0;c<N;c++){
         var cell = board[r][c];
@@ -530,6 +568,8 @@ window.onerror = function(msg, url, line, col){
         drawCell(x, y, cell.letter, opts);
       }
     }
+
+    // падающий кубик
     if (G.piece && (G.state === 'PLAYING') && !G.busy){
       var p = G.piece;
       drawCell(p.col * cellSize, p.visualRow * cellSize, p.letter, {
@@ -550,8 +590,11 @@ window.onerror = function(msg, url, line, col){
     toast:   document.getElementById('toast')
   };
 
-  var DIR_SYMBOL = { left:'←', right:'→', up:'↑', down:'↓' };
-  var DIR_ORDER  = ['left','right','up','down'];
+  var DIR_SYMBOL = {
+    right:'→', left:'←', up:'↑', down:'↓',
+    upRight:'↗', downRight:'↘', upLeft:'↖', downLeft:'↙'
+  };
+  var DIR_ORDER = ['right','left','up','down','upRight','downRight','upLeft','downLeft'];
 
   function updateDirs(){
     if (!el.dirs) return;
@@ -571,13 +614,12 @@ window.onerror = function(msg, url, line, col){
   }
   function previewColor(letter){
     var b = letterBonus(letter);
-    if (b >= 10) return { bg:'linear-gradient(160deg,#5a2030,#3a1020)', fg:'#ff9ea8', sh:'inset 0 0 0 1px rgba(255,120,140,.6)' };
-    if (b >= 5)  return { bg:'linear-gradient(160deg,#4a2a6a,#2a1a4a)', fg:'#d8b0ff', sh:'inset 0 0 0 1px rgba(200,140,255,.55)' };
+    if (b >= 10) return { bg:'linear-gradient(to bottom,#ffb0c0,#e02050)', fg:'#3a0018', sh:'0 3px 0 #a0103a, 0 6px 12px rgba(0,0,0,.3)' };
+    if (b >= 5)  return { bg:'linear-gradient(to bottom,#dfb0ff,#a94cff)', fg:'#2a0040', sh:'0 3px 0 #6f1fbf, 0 6px 12px rgba(0,0,0,.3)' };
     return { bg:'', fg:'', sh:'' };
   }
   function updatePreviews(){
-    if (el.pv0){
-      el.pv0.textContent = G.queue[0] || '·';
+    if (el.pv.pv0.textContent = G.queue[0] || '·';
       var c0 = previewColor(G.queue[0]);
       el.pv0.style.background = c0.bg;
       el.pv0.style.color = c0.fg;
@@ -611,7 +653,7 @@ window.onerror = function(msg, url, line, col){
     el.overlay.innerHTML = '';
   }
 
-  /* ---------- Баннер перехода на новый уровень ---------- */
+  /* ---------- Баннер уровня ---------- */
   var levelupEl = null;
   var levelupTimer = null;
   function ensureLevelupEl(){
@@ -721,10 +763,13 @@ window.onerror = function(msg, url, line, col){
     if (maxBonus >= 10) Audio8.superBonus();
     else if (maxBonus >= 5) Audio8.bonus();
 
+    var comboTag = ' ×' + words.length + ' комбо';
     if (maxBonus >= 10){
-      toast('БОНУС ×' + maxBonus + '  +' + gain, 1500, '#ff8aa6');
+      toast('БОНУС ×' + maxBonus + comboTag + '  +' + gain, 1500, '#ff8aa6');
     } else if (maxBonus >= 5){
-      toast('БОНУС ×' + maxBonus + '  +' + gain, 1400, '#d8b0ff');
+      toast('БОНУС ×' + maxBonus + comboTag + '  +' + gain, 1400, '#d8b0ff');
+    } else if (words.length > 1){
+      toast('КОМБО ×' + words.length + '  +' + gain, 1100, '#ffd66b');
     } else {
       toast('+' + gain, 900, '#ffd66b');
     }
@@ -769,7 +814,6 @@ window.onerror = function(msg, url, line, col){
       G.fallMoves = applyGravity();
       G.phase = { type: 'fall', start: performance.now(), dur: 170 };
 
-      // при повышении уровня — дополнительная пауза после осыпания
       var releaseDelay = 170 + (leveledUp ? CONFIG.LEVELUP_PAUSE_MS : 0);
 
       setTimeout(function(){
@@ -936,6 +980,11 @@ window.onerror = function(msg, url, line, col){
         '<b style="color:#ffd66b">Золотые</b> — обычные · ' +
         '<b style="color:#d8b0ff">фиолетовые ×5</b> — с буквой <b>ы э ю з й ф х ц ч ш щ</b> · ' +
         '<b style="color:#ff8aa6">малиновые ×10</b> — с <b>ь</b> или <b>ъ</b>' +
+      '</p>' +
+      '<p style="font-size:12px;color:#a8b6d4;margin-top:6px">' +
+        'Направления чтения открываются каждые 2 уровня: → →← →←↑ →←↑↓ … ' +
+        'с 15-го уровня доступны все 8, включая диагонали. ' +
+        'Комбо: очки × количество найденных слов.' +
       '</p>' +
       '<p style="font-size:11px;color:#5a6b8f">Словарь: ' + count + ' слов · Новый уровень каждые 3000 очков</p>' +
       '<button id="startBtn">НАЧАТЬ</button>');
