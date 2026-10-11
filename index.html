@@ -10,20 +10,13 @@
     --text-dim:#b8c2dc;
     --text-muted:#7a86a8;
     --text-label:#5a6b8f;
-    --gold-top:#ffe28a;
-    --gold-bottom:#f0a83a;
-    --gold-edge:#e0a83a;
-    --gold-shadow:#a06f18;
-    --gold-letter:#3a2400;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
   html,body{
     margin:0;padding:0;height:100%;color:var(--text);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    overflow:hidden;
-    background-color:#0a0620;
+    overflow:hidden;background-color:#0a0620;
   }
-  /* Космический фон */
   body::before{
     content:'';position:fixed;inset:0;z-index:-2;
     background:
@@ -32,7 +25,6 @@
       radial-gradient(ellipse 110% 70% at 50% 100%, rgba(255,110,180,.45) 0%, transparent 60%),
       radial-gradient(ellipse 100% 80% at 50% 40%, #241245 0%, #12082a 55%, #06041a 100%);
   }
-  /* Звёзды */
   body::after{
     content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
     background-image:
@@ -56,7 +48,7 @@
   }
   #app{
     display:flex;flex-direction:column;align-items:center;
-    height:100vh;height:100dvh;padding:10px;gap:10px;
+    height:100vh;height:100dvh;padding:10px;gap:8px;
     position:relative;z-index:1;
   }
   header{display:flex;justify-content:space-between;width:100%;max-width:480px;padding:0 8px}
@@ -74,9 +66,15 @@
     line-height:1.1;
   }
   .stat.right{align-items:flex-end}
+  #planet{
+    font-size:11px;letter-spacing:2px;
+    color:#a8b6d4;margin-top:3px;
+    font-weight:800;text-transform:uppercase;
+    text-shadow:0 0 12px rgba(180,140,255,.5);
+  }
   #dirs{
     font-size:13px;letter-spacing:4px;
-    color:#2a3354;margin-top:4px;
+    color:#2a3354;margin-top:3px;
     line-height:1;font-weight:700;
   }
   #dirs span.on{color:#7cc0ff;text-shadow:0 0 8px #4A90FF}
@@ -103,6 +101,7 @@
     background:linear-gradient(to bottom,#ffffff,#dce4f0);
     color:#1e2a4a;
     box-shadow:0 3px 0 #9aa5bf,0 6px 12px rgba(0,0,0,.4);
+    transition:background .15s ease, color .15s ease, box-shadow .15s ease;
   }
   #controls{
     display:flex;justify-content:space-between;
@@ -119,11 +118,13 @@
     box-shadow:0 4px 0 #8a94b0,0 8px 20px rgba(0,0,0,.4);
     transition:transform .06s ease, box-shadow .06s ease;
     -webkit-appearance:none;appearance:none;padding:0;font-family:inherit;
+    outline:none;
   }
   .key:active{
     transform:translateY(3px);
     box-shadow:0 1px 0 #8a94b0,0 4px 10px rgba(0,0,0,.4);
   }
+  .key:focus{outline:none}
   .key.go{
     background:linear-gradient(to bottom,#ffd66b,#f0a83a);
     border-color:#e0a83a;color:#3a2400;
@@ -140,10 +141,11 @@
     justify-content:center;background:rgba(8,6,24,.92);border-radius:18px;
     text-align:center;padding:22px;gap:12px;backdrop-filter:blur(10px);
     z-index:10;overflow-y:auto;
+    opacity:0;transition:opacity .35s ease;
   }
-  #overlay.on{display:flex}
+  #overlay.on{display:flex;opacity:1}
   #overlay h1{
-    margin:0;font-size:44px;letter-spacing:10px;font-weight:900;
+    margin:0;font-size:40px;letter-spacing:8px;font-weight:900;
     background:linear-gradient(90deg,#7cc0ff 0%,#c88bff 50%,#ff9ec0 100%);
     -webkit-background-clip:text;background-clip:text;color:transparent;
     filter:drop-shadow(0 0 24px rgba(200,140,255,.7));
@@ -182,7 +184,9 @@
 <div id="app">
   <header>
     <div class="stat">Счёт<b id="score">0</b></div>
-    <div class="stat right">Уровень<b id="level">1</b>
+    <div class="stat right">
+      Уровень<b id="level">1</b>
+      <div id="planet">Меркурий</div>
       <div id="dirs"></div>
     </div>
   </header>
@@ -194,12 +198,12 @@
   <div id="previews"><span>Далее</span><div class="pv" id="pv0">·</div><div class="pv" id="pv1">·</div></div>
   <div id="controls">
     <div class="grp">
-      <button class="key" data-act="left">←</button>
-      <button class="key" data-act="right">→</button>
+      <button type="button" class="key" data-act="left">←</button>
+      <button type="button" class="key" data-act="right">→</button>
     </div>
     <div class="grp">
-      <button class="key" data-act="down">↓</button>
-      <button class="key go" data-act="go">GO</button>
+      <button type="button" class="key" data-act="down">↓</button>
+      <button type="button" class="key go" data-act="go">GO</button>
     </div>
   </div>
 </div>
