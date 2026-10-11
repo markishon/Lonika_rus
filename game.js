@@ -1,9 +1,9 @@
 /* =====================================================================
-   ЛОНИКА — движок v8
-   + дизайн в стиле Words of Wonders (светлые плитки, 3D-тень)
-   + 8 направлений, диагонали с 9 уровня
-   + комбо = количество найденных слов
-   + бонусы ×5 / ×10 за редкие буквы
+   ЛОНИКА — движок v9 (космический стиль по мокапу)
+   + падающие: синие / фиолетовые ×5 / малиновые ×10
+   + зафиксированные: белые / светло-фиолетовые / светло-малиновые
+   + подсветка слова: золотая с усиленным свечением
+   + космический фон со звёздами и горами
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -21,7 +21,6 @@ window.onerror = function(msg, url, line, col){
 (function(){
   'use strict';
 
-  /* ---------- CONFIG ---------- */
   var CONFIG = {
     N: 11,
     SPAWN_COL: 5,
@@ -31,7 +30,6 @@ window.onerror = function(msg, url, line, col){
     MIN_WORD_LEN: 3,
     SCORE_MULT: 10,
     MAX_SCORE: 1000000,
-
     LEVEL_STEP: 3000,
     LEVELUP_PAUSE_MS: 1000,
 
@@ -57,7 +55,6 @@ window.onerror = function(msg, url, line, col){
 
     UNPOPULAR: ['ы','э','ю','з','й','ф','х','ц','ч','ш','щ'],
     SIGNS:     ['ь','ъ'],
-
     BONUS_UNPOPULAR: 5,
     BONUS_SIGN:      10,
 
@@ -68,12 +65,10 @@ window.onerror = function(msg, url, line, col){
   var LETTER_BONUS = Object.create(null);
   (function(){
     for (var ch in CONFIG.LETTER_WEIGHTS) LETTER_BONUS[ch] = 1;
-    for (var i=0;i<CONlevelFIG.UNPOPULAR.length;i++)){
- LETTER_BONUS[CONFIG.UNPOP   ULAR[i]] = CONFIG.BON forUS_UNPOPULAR;
+    for (var i=0;i<CONFIG.UNPOPULAR.length;i++) LETTER_BONUS[CONFIG.UNPOPULAR[i]] = CONFIG.BONUS_UNPOPULAR;
     for (var j=0;j<CONFIG.SIGNS.length;j++)     LETTER_BONUS[CONFIG.SIGNS[j]]     = CONFIG.BONUS_SIGN;
   })();
 
-  /* ---------- СЛОВАРЬ (Ё → Е) ---------- */
   var DICT_RAW = (window.LONIKA_DICT || [])
     .filter(function(w){
       return typeof w === 'string' && /^[А-ЯЁа-яё]+$/.test(w) && w.length >= CONFIG.MIN_WORD_LEN;
@@ -83,7 +78,6 @@ window.onerror = function(msg, url, line, col){
     console.error('Словарь пуст или не загружен. Проверь dictionary.js');
   }
 
-  /* ---------- Trie ---------- */
   function Trie(){ this.root = Object.create(null); }
   Trie.prototype.insert = function(w){
     var n = this.root;
@@ -115,7 +109,6 @@ window.onerror = function(msg, url, line, col){
     trie.insert(DICT_RAW[di].toUpperCase());
   }
 
-  /* ---------- Генератор букв ---------- */
   var ALL_LETTERS = Object.keys(CONFIG.LETTER_WEIGHTS);
   var VOWELS_SET = { 'а':1,'е':1,'и':1,'о':1,'у':1,'ы':1,'э':1,'ю':1,'я':1 };
   var VOWEL_LIST = [], CONSONANT_LIST = [];
@@ -167,7 +160,6 @@ window.onerror = function(msg, url, line, col){
     return b;
   }
 
-  /* ---------- Поле ---------- */
   var N = CONFIG.N;
   var board = [];
   var nextCellId = 1;
@@ -182,8 +174,8 @@ window.onerror = function(msg, url, line, col){
   function canPlace(r,c){ return r>=0 && r<N && c>=0 && c<N && !board[r][c]; }
   function canMoveTo(c,r){ return r<N && canPlace(r,c); }
 
-  /* ---------- Направления ---------- */
-  function getDirs( (var i=0;i<CONFIG.DIR_GROUPS.length;i++){
+  function getDirs(level){
+    for (var i=0;i<CONFIG.DIR_GROUPS.length;i++){
       if (level <= CONFIG.DIR_GROUPS[i].max) return CONFIG.DIR_GROUPS[i].dirs;
     }
     return ['right'];
@@ -202,7 +194,6 @@ window.onerror = function(msg, url, line, col){
     return v;
   }
 
-  /* ---------- Поиск слов ---------- */
   function findWords(level){
     var vecs = getDirVectors(level);
     var all = [];
@@ -225,11 +216,7 @@ window.onerror = function(msg, url, line, col){
               var sig = r + ',' + c + '|' + dr + ',' + dc + '|' + word;
               if (!seen[sig]){
                 seen[sig] = 1;
-                all.push({
-                  word: word,
-                  cells: cells.slice(),
-                  bonus: wordBonus(word)
-                });
+                all.push({ word: word, cells: cells.slice(), bonus: wordBonus(word) });
               }
             }
             rr += dr; cc += dc;
@@ -245,8 +232,7 @@ window.onerror = function(msg, url, line, col){
       var dominated = false;
       for (var j=0; j<result.length; j++){
         if (a.cells.length < result[j].cells.length && isCellSubset(a.cells, result[j].cells)){
-          dominated = true;
-          break;
+          dominated = true; break;
         }
       }
       if (!dominated) result.push(a);
@@ -262,8 +248,6 @@ window.onerror = function(msg, url, line, col){
     return true;
   }
 
-  /* ---------- Очки ----------
-     score = Σ(длина² × 10 × буквенный_бонус) × количество_слов */
   function scoreWords(words){
     var sum = 0;
     for (var i=0;i<words.length;i++){
@@ -274,13 +258,8 @@ window.onerror = function(msg, url, line, col){
     return Math.round(sum * words.length);
   }
 
-  /* ---------- Уровни ---------- */
-  function levelForScore(s){
-    return Math.floor(s / CONFIG.LEVEL_STEP) + 1;
-  }
-  function effectiveLevel(lv){
-    return Math.min(lv, CONFIG.MAX_SPEED_LEVEL);
-  }
+  function levelForScore(s){ return Math.floor(s / CONFIG.LEVEL_STEP) + 1; }
+  function effectiveLevel(lv){ return Math.min(lv, CONFIG.MAX_SPEED_LEVEL); }
   function fallInterval(level){
     return CONFIG.BASE_INTERVAL / Math.pow(CONFIG.SPEED_FACTOR, effectiveLevel(level) - 1);
   }
@@ -354,35 +333,24 @@ window.onerror = function(msg, url, line, col){
     };
   })();
 
-  /* ---------- Состояние ---------- */
   var G = {
-    state: 'READY',
-    score: 0,
-    level: 1,
-    piece: null,
-    queue: [],
-    highlight: [],
-    busy: false,
-    phase: null,
-    fallMoves: [],
-    deleting: []
+    state: 'READY', score: 0, level: 1, piece: null, queue: [],
+    highlight: [], busy: false, phase: null, fallMoves: [], deleting: []
   };
 
-  /* ---------- Рендер ---------- */
   var canvas = document.getElementById('board');
   var ctx = canvas.getContext('2d');
   var cellSize = 32, boardPx = 416;
   var lastFrameTs = performance.now();
 
   function resize(){
-    var controlsEl = document0.getElementById('controls');
-    var previewsEl = document.getElementById){
-('previews');
-    var headerEl = document.querySelector('header     ');
-    var controlsH = controlsEl ? controlsEl. eloffsetHeight : 80;
+    var controlsEl = document.getElementById('controls');
+    var previewsEl = document.getElementById('previews');
+    var headerEl = document.querySelector('header');
+    var controlsH = controlsEl ? controlsEl.offsetHeight : 80;
     var previewsH = previewsEl ? previewsEl.offsetHeight : 40;
     var headerH = headerEl ? headerEl.offsetHeight : 50;
-    var availW = Math.min(window.innerWidth - 24, 560);
+    var availW = Math.min(window.innerWidth - 24, 480);
     var availH = window.innerHeight - headerH - previewsH - controlsH - 60;
     boardPx = Math.max(220, Math.min(availW, availH));
     var dpr = window.devicePixelRatio || 1;
@@ -405,33 +373,36 @@ window.onerror = function(msg, url, line, col){
     ctx.closePath();
   }
 
-  // Возвращает {top, bottom, edge, shadow, letter} для плитки
+  /* ---------- Палитры плиток ---------- */
   function tilePalette(tier, mode){
     if (mode === 'highlight'){
-      if (tier >= 10) return { top:'#ffb0c0', bottom:'#e02050', edge:'#a0103a', shadow:'#7a0a2a', letter:'#3a0018' };
-      if (tier >= 5)  return { top:'#dfb0ff', bottom:'#a94cff', edge:'#6f1fbf', shadow:'#4f108f', letter:'#2a0040' };
-      return                 { top:'#ffe28a', bottom:'#f7a93c', edge:'#c67d18', shadow:'#8f5608', letter:'#3a2400' };
+      // золотая подсветка — независимо от tier, но tier влияет на оттенок свечения
+      return { top:'#FFE28A', bottom:'#F0A83A', edge:'#C67D18', shadow:'#8F5608', letter:'#3A2400' };
     }
     if (mode === 'falling'){
-      if (tier >= 10) return { top:'#ff9ea8', bottom:'#d02040', edge:'#a01030', shadow:'#7a0828', letter:'#ffffff' };
-      if (tier >= 5)  return { top:'#c8a0ff', bottom:'#7c2ecc', edge:'#5a1a9a', shadow:'#3a0e6a', letter:'#ffffff' };
-      return                 { top:'#7cc0ff', bottom:'#4a6cf7', edge:'#2c46b8', shadow:'#1c2c8a', letter:'#ffffff' };
+      if (tier >= 10) return { top:'#FF7BA8', bottom:'#D02050', edge:'#A01030', shadow:'#7A0828', letter:'#FFFFFF' };
+      if (tier >= 5)  return { top:'#C471FF', bottom:'#8A2EE6', edge:'#5A1A9A', shadow:'#3A0E6A', letter:'#FFFFFF' };
+      return               { top:'#5DA8FF', bottom:'#2E6FE6', edge:'#1D4AB8', shadow:'#0E2A8A', letter:'#FFFFFF' };
     }
-    // fixed (без подсветки)
-    if (tier >= 10) return { top:'#6a4048', bottom:'#3a1520', edge:'#2a0e18', shadow:'#180810', letter:'#ffffff' };
-    if (tier >= 5)  return { top:'#5a4078', bottom:'#2e1a4a', edge:'#1f1233', shadow:'#130a22', letter:'#ffffff' };
-    return                 { top:'#ffffff', bottom:'#dfe4ef', edge:'#c8cfdf', shadow:'#9aa5bf', letter:'#1e2a4a' };
+    // fixed
+    if (tier >= 10) return { top:'#FFD5E0', bottom:'#E8B0C0', edge:'#C890A0', shadow:'#A07080', letter:'#5A0A28' };
+    if (tier >= 5)  return { top:'#E8D5FF', bottom:'#C8AAE8', edge:'#A88AD0', shadow:'#8870B0', letter:'#3A1560' };
+    return               { top:'#FFFFFF', bottom:'#DCE4F0', edge:'#C8D0E0', shadow:'#9AA5BF', letter:'#1E2A4A' };
   }
-
   function glowColorFor(tier){
-    if (tier >= 10) return '#ff5070';
-    if (tier >= 5)  return '#c88bff';
-    return '#ffd66b';
+    if (tier >= 10) return '#FF3E7F';
+    if (tier >= 5)  return '#B44CFF';
+    return '#FFD66B';
+  }
+  function fallingGlowFor(tier){
+    if (tier >= 10) return '#FF3E7F';
+    if (tier >= 5)  return '#B44CFF';
+    return '#4A90FF';
   }
 
   function drawCell(x, y, letter, opts){
     opts = opts || {};
-    var pad = cellSize * 0.06;
+    var pad = cellSize * 0.07;
     var s = cellSize - pad * 2;
     var r = s * 0.22;
     var alpha = opts.alpha != null ? opts.alpha : 1;
@@ -449,12 +420,21 @@ window.onerror = function(msg, url, line, col){
     ctx.scale(scale, scale);
     ctx.translate(-cellSize/2, -cellSize/2);
 
-    // тень-основание под плиткой (имитация 3D)
+    // Внешнее свечение для падающих и подсвеченных
+    if (mode === 'falling' || mode === 'highlight'){
+      var glowCol = mode === 'falling' ? fallingGlowFor(tier) : glowColorFor(tier);
+      var glowBlur = mode === 'highlight' ? 26 : (tier >= 5 ? 22 : 18);
+      ctx.shadowColor = glowCol;
+      ctx.shadowBlur = glowBlur;
+    }
+
+    // Тень-основание
     ctx.fillStyle = pal.shadow;
     roundRect(pad, pad + shadowH, s, s, r);
     ctx.fill();
 
-    // сама плитка (градиент сверху вниз)
+    // Основная плитка
+    ctx.shadowBlur = 0;
     var g = ctx.createLinearGradient(0, pad, 0, pad + s);
     g.addColorStop(0, pal.top);
     g.addColorStop(1, pal.bottom);
@@ -462,57 +442,59 @@ window.onerror = function(msg, url, line, col){
     roundRect(pad, pad, s, s, r);
     ctx.fill();
 
-    // тонкая обводка
+    // Обводка
     ctx.strokeStyle = pal.edge;
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // свечение для подсветки
-    if (opts.highlight){
-      var glow = glowColorFor(tier);
-      ctx.shadowColor = glow;
-      ctx.shadowBlur = tier >= 10 ? 26 : (tier >= 5 ? 22 : 16);
-      ctx.strokeStyle = 'rgba(255,255,255,.9)';
+    // Дополнительное свечение-контур для подсветки
+    if (mode === 'highlight'){
+      ctx.shadowColor = glowColorFor(tier);
+      ctx.shadowBlur = 22;
+      ctx.strokeStyle = 'rgba(255,255,255,.85)';
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.shadowBlur = 0;
     }
 
-    // буква
+    // Буква
     ctx.fillStyle = pal.letter;
-    ctx.font = '800 ' + (cellSize * 0.52) + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
+    ctx.font = '800 ' + (cellSize * 0.54) + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(letter, cellSize/2, cellSize/2 + 1);
     ctx.restore();
   }
 
   function render(){
-    // фон поля
-    ctx.fillStyle = '#1a2138';
+    // Фон поля
+    ctx.fillStyle = 'rgba(10, 14, 30, 0.9)';
     ctx.fillRect(0, 0, boardPx, boardPx);
 
-    // пустые клетки — тёмные прямоугольники с отступом
-    var pad = cellSize * 0.06;
+    // Пустые клетки
+    var pad = cellSize * 0.07;
     var s = cellSize - pad * 2;
     var r = s * 0.22;
     for (var rr0=0; rr0<N; rr0++){
       for (var cc0=0; cc0<N; cc0++){
         if (board[rr0][cc0]) continue;
-        ctx.fillStyle = '#232b47';
+        ctx.fillStyle = '#151a30';
         roundRect(cc0*cellSize + pad, rr0*cellSize + pad, s, s, r);
         ctx.fill();
+        ctx.strokeStyle = 'rgba(120,150,220,0.06)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
     }
 
-    // сетка (тонкие линии по краям клеток)
-    ctx.strokeStyle = '#2f3858';
+    // Сетка — очень тонкая
+    ctx.strokeStyle = 'rgba(100,130,200,0.04)';
     ctx.lineWidth = 1;
     for (var i=1; i<N; i++){
       ctx.beginPath(); ctx.moveTo(i*cellSize, 0); ctx.lineTo(i*cellSize, boardPx); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, i*cellSize); ctx.lineTo(boardPx, i*cellSize); ctx.stroke();
     }
 
-    // карта подсветки
+    // Карта подсветки
     var hl = Object.create(null);
     for (var hi=0; hi<G.highlight.length; hi++){
       var hw = G.highlight[hi];
@@ -524,7 +506,7 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // анимация удаления
+    // Удаление
     var delSet = Object.create(null);
     var now = performance.now();
     if (G.phase && G.phase.type === 'delete'){
@@ -533,7 +515,7 @@ window.onerror = function(msg, url, line, col){
         delSet[G.deleting[dI].r*N + G.deleting[dI].c] = dt1;
       }
     }
-    // анимация падения
+    // Падение
     var fallMap = Object.create(null);
     if (G.phase && G.phase.type === 'fall'){
       var dt2 = Math.min(1, (now - G.phase.start) / G.phase.dur);
@@ -544,7 +526,7 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // зафиксированные буквы
+    // Зафиксированные буквы
     for (var r=0;r<N;r++){
       for (var c=0;c<N;c++){
         var cell = board[r][c];
@@ -559,7 +541,7 @@ window.onerror = function(msg, url, line, col){
         var mark = hl[r*N + c];
         var opts = {
           highlight: !!mark,
-          tier: mark || 1
+          tier: mark || letterBonus(cell.letter)
         };
         if (delT != null){
           opts.alpha = 1 - delT;
@@ -569,7 +551,7 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // падающий кубик
+    // Падающий кубик
     if (G.piece && (G.state === 'PLAYING') && !G.busy){
       var p = G.piece;
       drawCell(p.col * cellSize, p.visualRow * cellSize, p.letter, {
@@ -614,12 +596,13 @@ window.onerror = function(msg, url, line, col){
   }
   function previewColor(letter){
     var b = letterBonus(letter);
-    if (b >= 10) return { bg:'linear-gradient(to bottom,#ffb0c0,#e02050)', fg:'#3a0018', sh:'0 3px 0 #a0103a, 0 6px 12px rgba(0,0,0,.3)' };
-    if (b >= 5)  return { bg:'linear-gradient(to bottom,#dfb0ff,#a94cff)', fg:'#2a0040', sh:'0 3px 0 #6f1fbf, 0 6px 12px rgba(0,0,0,.3)' };
+    if (b >= 10) return { bg:'linear-gradient(to bottom,#FF7BA8,#D02050)', fg:'#fff', sh:'0 3px 0 #A01030,0 6px 12px rgba(0,0,0,.4)' };
+    if (b >= 5)  return { bg:'linear-gradient(to bottom,#C471FF,#8A2EE6)', fg:'#fff', sh:'0 3px 0 #5A1A9A,0 6px 12px rgba(0,0,0,.4)' };
     return { bg:'', fg:'', sh:'' };
   }
   function updatePreviews(){
-    if (el.pv.pv0.textContent = G.queue[0] || '·';
+    if (el.pv0){
+      el.pv0.textContent = G.queue[0] || '·';
       var c0 = previewColor(G.queue[0]);
       el.pv0.style.background = c0.bg;
       el.pv0.style.color = c0.fg;
@@ -653,7 +636,6 @@ window.onerror = function(msg, url, line, col){
     el.overlay.innerHTML = '';
   }
 
-  /* ---------- Баннер уровня ---------- */
   var levelupEl = null;
   var levelupTimer = null;
   function ensureLevelupEl(){
@@ -662,10 +644,10 @@ window.onerror = function(msg, url, line, col){
     levelupEl.id = 'levelup';
     levelupEl.style.cssText =
       'position:fixed;left:50%;top:44%;transform:translate(-50%,-50%) scale(0.85);' +
-      'padding:18px 36px;border-radius:22px;' +
-      'background:linear-gradient(135deg,rgba(255,210,90,.98),rgba(255,150,40,.98));' +
+      'padding:22px 42px;border-radius:26px;' +
+      'background:linear-gradient(135deg,rgba(255,220,120,.98),rgba(255,150,50,.98));' +
       'color:#2a1400;font-weight:900;text-align:center;z-index:9998;' +
-      'box-shadow:0 20px 70px rgba(255,180,60,.55),0 0 0 2px rgba(255,255,255,.4);' +
+      'box-shadow:0 24px 80px rgba(255,180,60,.7),0 0 0 3px rgba(255,255,255,.5),0 0 60px rgba(255,180,80,.5);' +
       'opacity:0;transition:opacity .25s ease, transform .25s cubic-bezier(.34,1.56,.64,1);' +
       'pointer-events:none;font-family:-apple-system,"Segoe UI",Roboto,sans-serif';
     document.body.appendChild(levelupEl);
@@ -673,13 +655,13 @@ window.onerror = function(msg, url, line, col){
   }
   function showLevelUp(newLevel, delta){
     var el2 = ensureLevelupEl();
-    var body = '<div style="font-size:11px;letter-spacing:4px;opacity:.75;margin-bottom:2px">УРОВЕНЬ</div>' +
-               '<div style="font-size:46px;letter-spacing:2px;line-height:1">' + newLevel + '</div>';
+    var body = '<div style="font-size:12px;letter-spacing:5px;opacity:.7;margin-bottom:4px">УРОВЕНЬ</div>' +
+               '<div style="font-size:52px;letter-spacing:3px;line-height:1">' + newLevel + '</div>';
     if (delta > 0){
-      body += '<div style="font-size:13px;margin-top:8px;font-weight:800;letter-spacing:1px">' +
-              'СКОРОСТЬ +' + delta + '%</div>';
+      body += '<div style="font-size:14px;margin-top:10px;font-weight:800;letter-spacing:1px">' +
+              '⚡ СКОРОСТЬ +' + delta + '%</div>';
     } else {
-      body += '<div style="font-size:12px;margin-top:8px;font-weight:700;letter-spacing:1px;opacity:.65">' +
+      body += '<div style="font-size:13px;margin-top:10px;font-weight:700;letter-spacing:1px;opacity:.65">' +
               'МАКС. СКОРОСТЬ</div>';
     }
     el2.innerHTML = body;
@@ -697,22 +679,15 @@ window.onerror = function(msg, url, line, col){
     if (G.state === 'PAUSED') togglePause();
   });
 
-  /* ---------- Логика ---------- */
   function startGame(){
     newBoard();
-    G.score = 0;
-    G.level = 1;
-    G.piece = null;
+    G.score = 0; G.level = 1; G.piece = null;
     typeHistory = [];
     G.queue = [randomLetter(), randomLetter()];
-    G.highlight = [];
-    G.busy = false;
-    G.phase = null;
-    G.deleting = [];
-    G.fallMoves = [];
+    G.highlight = []; G.busy = false; G.phase = null;
+    G.deleting = []; G.fallMoves = [];
     G.state = 'PLAYING';
-    updateUI();
-    updatePreviews();
+    updateUI(); updatePreviews();
     hideOverlay();
     spawnPiece();
   }
@@ -755,7 +730,6 @@ window.onerror = function(msg, url, line, col){
 
     Audio8.go();
     var gain = scoreWords(words);
-
     var maxBonus = 1;
     for (var mb=0; mb<words.length; mb++){
       if (words[mb].bonus > maxBonus) maxBonus = words[mb].bonus;
@@ -813,15 +787,11 @@ window.onerror = function(msg, url, line, col){
 
       G.fallMoves = applyGravity();
       G.phase = { type: 'fall', start: performance.now(), dur: 170 };
-
       var releaseDelay = 170 + (leveledUp ? CONFIG.LEVELUP_PAUSE_MS : 0);
 
       setTimeout(function(){
-        G.phase = null;
-        G.fallMoves = [];
-        G.deleting = [];
-        G.busy = false;
-        refreshHighlight();
+        G.phase = null; G.fallMoves = []; G.deleting = [];
+        G.busy = false; refreshHighlight();
         if (G.score >= CONFIG.MAX_SCORE) victory();
       }, releaseDelay);
     }, 155);
@@ -834,8 +804,7 @@ window.onerror = function(msg, url, line, col){
         var cell = board[r][c];
         if (cell){
           if (writeRow !== r){
-            board[writeRow][c] = cell;
-            board[r][c] = null;
+            board[writeRow][c] = cell; board[r][c] = null;
             moves.push({ id: cell.id, c: c, fromR: r, toR: writeRow });
           }
           writeRow--;
@@ -845,39 +814,58 @@ window.onerror = function(msg, url, line, col){
     return moves;
   }
   function gameOver(){
-    G.state = 'GAMEOVER';
-    Audio8.gameover();
-    showOverlay('<h1>ИГРА ОКОНЧЕНА</h1>' +
-      '<p>Отлично получается, попробуй ещё раз!</p>' +
-      '<p style="color:#fff;font-size:20px;font-weight:800">СЧЁТ: ' +
-      G.score.toLocaleString('ru-RU') + '</p>' +
-      '<p style="color:#a8b6d4;font-size:14px">УРОВЕНЬ: ' + G.level + '</p>' +
-      '<button id="againBtn">ЗАНОВО</button>');
+    G.state = 'GAMEOVER'; Audio8.gameover();
+    var best = 0;
+    try { best = parseInt(localStorage.getItem('lonika_best') || '0', 10) || 0; } catch(e){}
+    var isRecord = G.score > best;
+    if (isRecord){
+      try { localStorage.setItem('lonika_best', String(G.score)); } catch(e){}
+    }
+    var recordBadge = isRecord
+      ? '<div style="display:inline-block;padding:6px 16px;border-radius:999px;' +
+        'background:linear-gradient(to bottom,#ffd66b,#f0a83a);color:#3a2400;' +
+        'font-weight:900;font-size:12px;letter-spacing:2px;margin-top:6px;' +
+        'box-shadow:0 3px 0 #a06f18,0 0 24px rgba(255,200,80,.6)">НОВЫЙ РЕКОРД!</div>'
+      : '<div style="margin-top:6px;font-size:12px;color:#7a86a8;letter-spacing:1px">лучший: ' + best.toLocaleString('ru-RU') + '</div>';
+    showOverlay(
+      '<h1 style="font-size:32px;letter-spacing:6px">ИГРА ОКОНЧЕНА</h1>' +
+      '<div style="margin-top:12px;padding:18px 32px;border-radius:20px;' +
+        'background:rgba(20,16,50,.85);border:1px solid rgba(120,140,220,.25);' +
+        'box-shadow:0 12px 40px rgba(0,0,0,.5)">' +
+        '<div style="font-size:11px;letter-spacing:4px;color:#7a86a8">СЧЁТ</div>' +
+        '<div style="font-size:38px;font-weight:900;color:#fff;margin-top:4px;font-variant-numeric:tabular-nums">' + G.score.toLocaleString('ru-RU') + '</div>' +
+        recordBadge +
+      '</div>' +
+      '<p style="margin-top:12px">Отлично получается, попробуй ещё раз!</p>' +
+      '<button id="againBtn">ИГРАТЬ ЕЩЁ</button>'
+    );
     document.getElementById('againBtn').onclick = startGame;
   }
   function victory(){
-    G.state = 'VICTORY';
-    Audio8.victory();
-    showOverlay('<h1>ПОБЕДА!</h1>' +
-      '<p>Ты набрал 1 000 000 очков!</p>' +
-      '<p style="color:#fff;font-size:20px;font-weight:800">СЧЁТ: ' +
-      G.score.toLocaleString('ru-RU') + '</p>' +
-      '<p style="color:#a8b6d4;font-size:14px">УРОВЕНЬ: ' + G.level + '</p>' +
-      '<button id="againBtn">ЕЩЁ РАЗ</button>');
+    G.state = 'VICTORY'; Audio8.victory();
+    showOverlay(
+      '<h1>ПОБЕДА!</h1>' +
+      '<div style="margin-top:12px;padding:18px 32px;border-radius:20px;' +
+        'background:rgba(20,16,50,.85);border:1px solid rgba(255,200,80,.35);' +
+        'box-shadow:0 12px 40px rgba(0,0,0,.5),0 0 60px rgba(255,200,80,.3)">' +
+        '<div style="font-size:11px;letter-spacing:4px;color:#7a86a8">СЧЁТ</div>' +
+        '<div style="font-size:38px;font-weight:900;color:#ffd66b;margin-top:4px;font-variant-numeric:tabular-nums">' + G.score.toLocaleString('ru-RU') + '</div>' +
+      '</div>' +
+      '<p style="margin-top:12px">Ты набрал 1 000 000 очков!</p>' +
+      '<button id="againBtn">ЕЩЁ РАЗ</button>'
+    );
     document.getElementById('againBtn').onclick = startGame;
   }
   function togglePause(){
     if (G.state === 'PLAYING'){
       G.state = 'PAUSED';
-      showOverlay('<h1>ПАУЗА</h1><p>Нажми Space, коснись поля или затемнения — продолжить</p>');
+      showOverlay('<h1 style="font-size:34px">ПАУЗА</h1><p>Нажми Space, коснись поля или затемнения — продолжить</p>');
     } else if (G.state === 'PAUSED'){
-      G.state = 'PLAYING';
-      hideOverlay();
+      G.state = 'PLAYING'; hideOverlay();
       lastFrameTs = performance.now();
     }
   }
 
-  /* ---------- Управление ---------- */
   var keys = { down: false };
   document.addEventListener('keydown', function(e){
     if (e.repeat && e.key !== 'ArrowDown') return;
@@ -929,7 +917,6 @@ window.onerror = function(msg, url, line, col){
     if (e.pointerType === 'touch' && (G.state === 'PLAYING' || G.state === 'PAUSED')) togglePause();
   });
 
-  /* ---------- Главный цикл ---------- */
   function update(dt){
     var lv = levelForScore(G.score);
     if (lv !== G.level){ G.level = lv; updateUI(); }
@@ -962,32 +949,25 @@ window.onerror = function(msg, url, line, col){
   }
 
   setInterval(function(){
-    if (G.state === 'PLAYING' && !G.busy){
-      refreshHighlight();
-    }
+    if (G.state === 'PLAYING' && !G.busy) refreshHighlight();
   }, CONFIG.HIGHLIGHT_REFRESH_MS);
 
-  /* ---------- Старт ---------- */
   function boot(){
-    newBoard();
-    resize();
-    updateUI();
+    newBoard(); resize(); updateUI();
     var count = DICT_RAW.length;
-    showOverlay('<h1>ЛОНИКА</h1>' +
-      '<p>Составляй слова из падающих букв. Слова НЕ удаляются сами — нажми GO, когда готов.</p>' +
-      '<p style="font-size:12px;color:#7c8db3">← → двигать · ↓ ускорить · Enter = GO · Space = пауза</p>' +
-      '<p style="font-size:13px;color:#d8b0ff;margin-top:6px">' +
-        '<b style="color:#ffd66b">Золотые</b> — обычные · ' +
-        '<b style="color:#d8b0ff">фиолетовые ×5</b> — с буквой <b>ы э ю з й ф х ц ч ш щ</b> · ' +
-        '<b style="color:#ff8aa6">малиновые ×10</b> — с <b>ь</b> или <b>ъ</b>' +
-      '</p>' +
-      '<p style="font-size:12px;color:#a8b6d4;margin-top:6px">' +
-        'Направления чтения открываются каждые 2 уровня: → →← →←↑ →←↑↓ … ' +
-        'с 15-го уровня доступны все 8, включая диагонали. ' +
-        'Комбо: очки × количество найденных слов.' +
-      '</p>' +
-      '<p style="font-size:11px;color:#5a6b8f">Словарь: ' + count + ' слов · Новый уровень каждые 3000 очков</p>' +
-      '<button id="startBtn">НАЧАТЬ</button>');
+    showOverlay(
+      '<div style="font-size:11px;letter-spacing:6px;color:#8fa3c8;opacity:.65;margin-bottom:2px">КОСМИЧЕСКИЕ СЛОВА</div>' +
+      '<h1>ЛОНИКА</h1>' +
+      '<p style="margin-top:10px">Собирай слова из падающих букв.<br>Слова НЕ удаляются сами — нажми <b style="color:#ffd66b">GO</b>, когда готов.</p>' +
+      '<div style="margin-top:16px;display:flex;gap:14px;font-size:12px;color:#b8c2dc;flex-wrap:wrap;justify-content:center">' +
+        '<span><b style="color:#5DA8FF">●</b> синие — обычные</span>' +
+        '<span><b style="color:#B44CFF">●</b> фиолетовые ×5</span>' +
+        '<span><b style="color:#FF3E7F">●</b> малиновые ×10</span>' +
+      '</div>' +
+      '<p style="font-size:12px;color:#7a86a8;margin-top:14px">← → двигать · ↓ ускорить · Enter = GO · Space = пауза</p>' +
+      '<p style="font-size:11px;color:#5a6b8f;margin-top:6px">Словарь: ' + count + ' слов · Уровень каждые 3000 очков</p>' +
+      '<button id="startBtn">ИГРАТЬ</button>'
+    );
     document.getElementById('startBtn').onclick = startGame;
     requestAnimationFrame(loop);
   }
