@@ -1,9 +1,10 @@
 /* =====================================================================
-   ЛОНИКА — движок v9 (космический стиль по мокапу)
-   + падающие: синие / фиолетовые ×5 / малиновые ×10
-   + зафиксированные: белые / светло-фиолетовые / светло-малиновые
-   + подсветка слова: золотая с усиленным свечением
-   + космический фон со звёздами и горами
+   ЛОНИКА — движок v10
+   + все 4 направления с 1-го уровня, диагонали на 9-12
+   + 30 планет-ачивок, победа на 30-м уровне
+   + торжественный переход уровня (3.5 сек)
+   + анимации: спавн, фиксация, GO-вспышка, пульсация подсветки
+   + фикс конфликта Enter с кнопкой GO
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -26,22 +27,32 @@ window.onerror = function(msg, url, line, col){
     SPAWN_COL: 5,
     BASE_INTERVAL: 1440,
     SPEED_FACTOR: 1.1,
-    MAX_SPEED_LEVEL: 15,
+    MAX_SPEED_LEVEL: 20,
     MIN_WORD_LEN: 3,
     SCORE_MULT: 10,
-    MAX_SCORE: 1000000,
+    MAX_LEVEL: 30,             // победа на 30-м уровне
     LEVEL_STEP: 3000,
-    LEVELUP_PAUSE_MS: 1000,
+    LEVELUP_PAUSE_MS: 3500,    // торжественный переход 3.5 сек
 
+    /* Направления чтения:
+       ур. 1–8: → ← ↑ ↓
+       ур. 9:   + ↗
+       ур. 10:  + ↘
+       ур. 11:  + ↖
+       ур. 12+: + ↙ (все 8) */
     DIR_GROUPS: [
-      { max: 2,     dirs: ['right'] },
-      { max: 4,     dirs: ['right','left'] },
-      { max: 6,     dirs: ['right','left','up'] },
       { max: 8,     dirs: ['right','left','up','down'] },
-      { max: 10,    dirs: ['right','left','up','down','upRight'] },
-      { max: 12,    dirs: ['right','left','up','down','upRight','downRight'] },
-      { max: 14,    dirs: ['right','left','up','down','upRight','downRight','upLeft'] },
+      { max: 9,     dirs: ['right','left','up','down','upRight'] },
+      { max: 10,    dirs: ['right','left','up','down','upRight','downRight'] },
+      { max: 11,    dirs: ['right','left','up','down','upRight','downRight','upLeft'] },
       { max: 99999, dirs: ['right','left','up','down','upRight','downRight','upLeft','downLeft'] }
+    ],
+
+    /* 30 планет — от простой к сложной */
+    PLANETS: [
+      'Меркурий','Венера','Земля','Марс','Юпитер','Сатурн','Уран','Нептун','Плутон','Харон',
+      'Луна','Фобос','Деймос','Ио','Европа','Ганимед','Каллисто','Титан','Энцелад','Мимас',
+      'Тритон','Церера','Веста','Паллада','Юнона','Гигея','Эрида','Макемаке','Хаумеа','Селена'
     ],
 
     LETTER_WEIGHTS: {
@@ -269,6 +280,10 @@ window.onerror = function(msg, url, line, col){
     if (newEff <= oldEff) return 0;
     return Math.round((Math.pow(CONFIG.SPEED_FACTOR, newEff - oldEff) - 1) * 100);
   }
+  function planetForLevel(lv){
+    var i = Math.max(0, Math.min(CONFIG.PLANETS.length - 1, lv - 1));
+    return CONFIG.PLANETS[i];
+  }
 
   /* ---------- Звук ---------- */
   var Audio8 = (function(){
@@ -308,7 +323,7 @@ window.onerror = function(msg, url, line, col){
     }
     return {
       move:  function(){ beep(440, 0.04, 'square', 0.04); },
-      lock:  function(){ beep(200, 0.08, 'triangle', 0.06); },
+      lock:  function(){ beep(220, 0.07, 'triangle', 0.06); },
       go:    function(){ beep(520, 0.09, 'square', 0.08); },
       score: function(){ beep(880, 0.06, 'sine', 0.07); setTimeout(function(){ beep(1180,0.07,'sine',0.07); }, 60); },
       bonus: function(){
@@ -322,20 +337,41 @@ window.onerror = function(msg, url, line, col){
         });
       },
       levelup: function(){
-        [523,659,784,1046].forEach(function(f,i){ setTimeout(function(){ beep(f,0.1,'triangle',0.09); }, i*70); });
+        // длинная торжественная фанфара ~1.5 сек
+        var notes = [523, 659, 784, 1046, 1318, 1568, 2093];
+        notes.forEach(function(f,i){
+          setTimeout(function(){ beep(f, 0.14, 'triangle', 0.10); }, i*110);
+        });
+        setTimeout(function(){
+          beep(523, 0.6, 'sine', 0.09);
+          beep(659, 0.6, 'sine', 0.09);
+          beep(784, 0.6, 'sine', 0.09);
+          beep(1046, 0.6, 'sine', 0.09);
+        }, 900);
       },
       gameover: function(){
         [400,300,200,140].forEach(function(f,i){ setTimeout(function(){ beep(f,0.18,'sawtooth',0.07); }, i*130); });
       },
       victory: function(){
-        [523,659,784,1046,1318].forEach(function(f,i){ setTimeout(function(){ beep(f,0.16,'sine',0.09); }, i*100); });
+        var notes = [523,659,784,1046,1318,1568,2093];
+        notes.forEach(function(f,i){ setTimeout(function(){ beep(f,0.16,'sine',0.10); }, i*130); });
+        setTimeout(function(){
+          beep(523, 0.8, 'sine', 0.10);
+          beep(659, 0.8, 'sine', 0.10);
+          beep(784, 0.8, 'sine', 0.10);
+          beep(1046, 0.8, 'sine', 0.10);
+          beep(1318, 0.8, 'sine', 0.10);
+        }, 1100);
       }
     };
   })();
 
   var G = {
     state: 'READY', score: 0, level: 1, piece: null, queue: [],
-    highlight: [], busy: false, phase: null, fallMoves: [], deleting: []
+    highlight: [], busy: false, phase: null, fallMoves: [], deleting: [],
+    lockFx: null,        // вспышка при фиксации
+    goFx: null,          // вспышка при GO
+    pulseT: 0            // время для пульсации подсветки
   };
 
   var canvas = document.getElementById('board');
@@ -349,7 +385,7 @@ window.onerror = function(msg, url, line, col){
     var headerEl = document.querySelector('header');
     var controlsH = controlsEl ? controlsEl.offsetHeight : 80;
     var previewsH = previewsEl ? previewsEl.offsetHeight : 40;
-    var headerH = headerEl ? headerEl.offsetHeight : 50;
+    var headerH = headerEl ? headerEl.offsetHeight : 60;
     var availW = Math.min(window.innerWidth - 24, 480);
     var availH = window.innerHeight - headerH - previewsH - controlsH - 60;
     boardPx = Math.max(220, Math.min(availW, availH));
@@ -373,10 +409,8 @@ window.onerror = function(msg, url, line, col){
     ctx.closePath();
   }
 
-  /* ---------- Палитры плиток ---------- */
   function tilePalette(tier, mode){
     if (mode === 'highlight'){
-      // золотая подсветка — независимо от tier, но tier влияет на оттенок свечения
       return { top:'#FFE28A', bottom:'#F0A83A', edge:'#C67D18', shadow:'#8F5608', letter:'#3A2400' };
     }
     if (mode === 'falling'){
@@ -384,7 +418,6 @@ window.onerror = function(msg, url, line, col){
       if (tier >= 5)  return { top:'#C471FF', bottom:'#8A2EE6', edge:'#5A1A9A', shadow:'#3A0E6A', letter:'#FFFFFF' };
       return               { top:'#5DA8FF', bottom:'#2E6FE6', edge:'#1D4AB8', shadow:'#0E2A8A', letter:'#FFFFFF' };
     }
-    // fixed
     if (tier >= 10) return { top:'#FFD5E0', bottom:'#E8B0C0', edge:'#C890A0', shadow:'#A07080', letter:'#5A0A28' };
     if (tier >= 5)  return { top:'#E8D5FF', bottom:'#C8AAE8', edge:'#A88AD0', shadow:'#8870B0', letter:'#3A1560' };
     return               { top:'#FFFFFF', bottom:'#DCE4F0', edge:'#C8D0E0', shadow:'#9AA5BF', letter:'#1E2A4A' };
@@ -420,20 +453,16 @@ window.onerror = function(msg, url, line, col){
     ctx.scale(scale, scale);
     ctx.translate(-cellSize/2, -cellSize/2);
 
-    // Внешнее свечение для падающих и подсвеченных
-    if (mode === 'falling' || mode === 'highlight'){
-      var glowCol = mode === 'falling' ? fallingGlowFor(tier) : glowColorFor(tier);
-      var glowBlur = mode === 'highlight' ? 26 : (tier >= 5 ? 22 : 18);
+    if (mode === 'falling'){
+      var glowCol = fallingGlowFor(tier);
       ctx.shadowColor = glowCol;
-      ctx.shadowBlur = glowBlur;
+      ctx.shadowBlur = tier >= 5 ? 22 : 18;
     }
 
-    // Тень-основание
     ctx.fillStyle = pal.shadow;
     roundRect(pad, pad + shadowH, s, s, r);
     ctx.fill();
 
-    // Основная плитка
     ctx.shadowBlur = 0;
     var g = ctx.createLinearGradient(0, pad, 0, pad + s);
     g.addColorStop(0, pal.top);
@@ -442,22 +471,22 @@ window.onerror = function(msg, url, line, col){
     roundRect(pad, pad, s, s, r);
     ctx.fill();
 
-    // Обводка
     ctx.strokeStyle = pal.edge;
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Дополнительное свечение-контур для подсветки
     if (mode === 'highlight'){
-      ctx.shadowColor = glowColorFor(tier);
-      ctx.shadowBlur = 22;
-      ctx.strokeStyle = 'rgba(255,255,255,.85)';
+      // пульсирующее свечение
+      var pulse = 0.5 + 0.5 * Math.sin(G.pulseT / 220);
+      var glow = glowColorFor(tier);
+      ctx.shadowColor = glow;
+      ctx.shadowBlur = 18 + pulse * 14;
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.7 + pulse * 0.3) + ')';
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.shadowBlur = 0;
     }
 
-    // Буква
     ctx.fillStyle = pal.letter;
     ctx.font = '800 ' + (cellSize * 0.54) + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -466,11 +495,9 @@ window.onerror = function(msg, url, line, col){
   }
 
   function render(){
-    // Фон поля
     ctx.fillStyle = 'rgba(10, 14, 30, 0.9)';
     ctx.fillRect(0, 0, boardPx, boardPx);
 
-    // Пустые клетки
     var pad = cellSize * 0.07;
     var s = cellSize - pad * 2;
     var r = s * 0.22;
@@ -486,7 +513,6 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // Сетка — очень тонкая
     ctx.strokeStyle = 'rgba(100,130,200,0.04)';
     ctx.lineWidth = 1;
     for (var i=1; i<N; i++){
@@ -494,7 +520,6 @@ window.onerror = function(msg, url, line, col){
       ctx.beginPath(); ctx.moveTo(0, i*cellSize); ctx.lineTo(boardPx, i*cellSize); ctx.stroke();
     }
 
-    // Карта подсветки
     var hl = Object.create(null);
     for (var hi=0; hi<G.highlight.length; hi++){
       var hw = G.highlight[hi];
@@ -506,7 +531,6 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // Удаление
     var delSet = Object.create(null);
     var now = performance.now();
     if (G.phase && G.phase.type === 'delete'){
@@ -515,7 +539,6 @@ window.onerror = function(msg, url, line, col){
         delSet[G.deleting[dI].r*N + G.deleting[dI].c] = dt1;
       }
     }
-    // Падение
     var fallMap = Object.create(null);
     if (G.phase && G.phase.type === 'fall'){
       var dt2 = Math.min(1, (now - G.phase.start) / G.phase.dur);
@@ -526,7 +549,6 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // Зафиксированные буквы
     for (var r=0;r<N;r++){
       for (var c=0;c<N;c++){
         var cell = board[r][c];
@@ -551,13 +573,48 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // Падающий кубик
+    // падающий кубик с анимацией появления
     if (G.piece && (G.state === 'PLAYING') && !G.busy){
       var p = G.piece;
+      var spawnT = 1;
+      if (p.spawnStart){
+        spawnT = Math.min(1, (now - p.spawnStart) / 220);
+      }
+      var easeSpawn = 1 - Math.pow(1 - spawnT, 3);
+      var scale = 0.5 + 0.5 * easeSpawn;
       drawCell(p.col * cellSize, p.visualRow * cellSize, p.letter, {
         falling: true,
-        tier: letterBonus(p.letter)
+        tier: letterBonus(p.letter),
+        scale: scale,
+        alpha: easeSpawn
       });
+    }
+
+    // вспышка при фиксации
+    if (G.lockFx){
+      var lt = (now - G.lockFx.start) / 350;
+      if (lt >= 1){ G.lockFx = null; }
+      else {
+        var lx = G.lockFx.c * cellSize + cellSize / 2;
+        var ly = G.lockFx.r * cellSize + cellSize / 2;
+        var radius = cellSize * (0.6 + lt * 0.9);
+        var alpha = (1 - lt) * 0.7;
+        var grad = ctx.createRadialGradient(lx, ly, 0, lx, ly, radius);
+        grad.addColorStop(0, 'rgba(255,255,255,' + alpha + ')');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(lx - radius, ly - radius, radius * 2, radius * 2);
+      }
+    }
+
+    // вспышка при GO
+    if (G.goFx){
+      var gt = (now - G.goFx) / 400;
+      if (gt >= 1){ G.goFx = null; }
+      else {
+        ctx.fillStyle = 'rgba(255,240,180,' + ((1 - gt) * 0.25) + ')';
+        ctx.fillRect(0, 0, boardPx, boardPx);
+      }
     }
   }
 
@@ -565,6 +622,7 @@ window.onerror = function(msg, url, line, col){
   var el = {
     score:   document.getElementById('score'),
     level:   document.getElementById('level'),
+    planet:  document.getElementById('planet'),
     dirs:    document.getElementById('dirs'),
     pv0:     document.getElementById('pv0'),
     pv1:     document.getElementById('pv1'),
@@ -592,6 +650,7 @@ window.onerror = function(msg, url, line, col){
   function updateUI(){
     if (el.score) el.score.textContent = G.score.toLocaleString('ru-RU');
     if (el.level) el.level.textContent = G.level;
+    if (el.planet) el.planet.textContent = planetForLevel(G.level);
     updateDirs();
   }
   function previewColor(letter){
@@ -636,42 +695,59 @@ window.onerror = function(msg, url, line, col){
     el.overlay.innerHTML = '';
   }
 
+  /* ---------- Торжественный баннер уровня ---------- */
   var levelupEl = null;
-  var levelupTimer = null;
+  var levelupTimer1 = null;
+  var levelupTimer2 = null;
   function ensureLevelupEl(){
     if (levelupEl) return levelupEl;
     levelupEl = document.createElement('div');
     levelupEl.id = 'levelup';
     levelupEl.style.cssText =
-      'position:fixed;left:50%;top:44%;transform:translate(-50%,-50%) scale(0.85);' +
-      'padding:22px 42px;border-radius:26px;' +
-      'background:linear-gradient(135deg,rgba(255,220,120,.98),rgba(255,150,50,.98));' +
-      'color:#2a1400;font-weight:900;text-align:center;z-index:9998;' +
-      'box-shadow:0 24px 80px rgba(255,180,60,.7),0 0 0 3px rgba(255,255,255,.5),0 0 60px rgba(255,180,80,.5);' +
-      'opacity:0;transition:opacity .25s ease, transform .25s cubic-bezier(.34,1.56,.64,1);' +
-      'pointer-events:none;font-family:-apple-system,"Segoe UI",Roboto,sans-serif';
+      'position:fixed;left:50%;top:45%;transform:translate(-50%,-50%) scale(0.4);' +
+      'padding:34px 46px 28px;border-radius:32px;' +
+      'background:radial-gradient(circle at 50% 30%, rgba(60,40,110,.98), rgba(20,12,45,.98));' +
+      'color:#fff;font-weight:900;text-align:center;z-index:9998;' +
+      'border:2px solid rgba(255,210,120,.7);' +
+      'box-shadow:0 30px 120px rgba(160,120,255,.7),0 0 0 6px rgba(255,200,80,.25),0 0 100px rgba(255,180,80,.5);' +
+      'opacity:0;transition:opacity .5s ease, transform .55s cubic-bezier(.34,1.56,.64,1);' +
+      'pointer-events:none;font-family:-apple-system,"Segoe UI",Roboto,sans-serif;min-width:280px';
     document.body.appendChild(levelupEl);
     return levelupEl;
   }
   function showLevelUp(newLevel, delta){
     var el2 = ensureLevelupEl();
-    var body = '<div style="font-size:12px;letter-spacing:5px;opacity:.7;margin-bottom:4px">УРОВЕНЬ</div>' +
-               '<div style="font-size:52px;letter-spacing:3px;line-height:1">' + newLevel + '</div>';
-    if (delta > 0){
-      body += '<div style="font-size:14px;margin-top:10px;font-weight:800;letter-spacing:1px">' +
-              '⚡ СКОРОСТЬ +' + delta + '%</div>';
-    } else {
-      body += '<div style="font-size:13px;margin-top:10px;font-weight:700;letter-spacing:1px;opacity:.65">' +
-              'МАКС. СКОРОСТЬ</div>';
-    }
+    var planetName = planetForLevel(newLevel);
+    var speedText = delta > 0
+      ? '<div style="margin-top:14px;font-size:14px;font-weight:800;letter-spacing:1.5px;color:#ffd66b">⚡ СКОРОСТЬ +' + delta + '%</div>'
+      : '<div style="margin-top:14px;font-size:13px;font-weight:700;letter-spacing:1.5px;color:#a8b6d4;opacity:.8">МАКС. СКОРОСТЬ</div>';
+    var body =
+      '<div style="font-size:11px;letter-spacing:6px;color:#b8c2dc;opacity:.7">НОВАЯ ПЛАНЕТА</div>' +
+      '<div style="margin:14px auto 0;width:110px;height:110px;border-radius:50%;' +
+        'background:radial-gradient(circle at 35% 30%, #ffd66b 0%, #f0a83a 40%, #8a4a20 100%);' +
+        'box-shadow:0 0 60px rgba(255,180,80,.9),inset -10px -10px 30px rgba(80,40,0,.6),inset 8px 8px 20px rgba(255,240,200,.6);' +
+        'position:relative">' +
+        '<div style="position:absolute;inset:-18px;border:1.5px solid rgba(180,140,255,.4);border-radius:50%;' +
+          'border-top-color:rgba(255,214,107,.9);transform:rotate(25deg)"></div>' +
+      '</div>' +
+      '<div style="margin-top:16px;font-size:34px;letter-spacing:3px;font-weight:900;' +
+        'background:linear-gradient(90deg,#ffd66b,#ff9ec0);-webkit-background-clip:text;background-clip:text;color:transparent;' +
+        'filter:drop-shadow(0 0 20px rgba(255,180,80,.6))">' + planetName.toUpperCase() + '</div>' +
+      '<div style="margin-top:14px;font-size:16px;letter-spacing:4px;color:#fff;font-weight:900">НОВЫЙ УРОВЕНЬ ' + newLevel + '</div>' +
+      speedText;
     el2.innerHTML = body;
     el2.style.opacity = '1';
     el2.style.transform = 'translate(-50%,-50%) scale(1)';
-    clearTimeout(levelupTimer);
-    levelupTimer = setTimeout(function(){
+
+    clearTimeout(levelupTimer1);
+    clearTimeout(levelupTimer2);
+    levelupTimer1 = setTimeout(function(){
       el2.style.opacity = '0';
+      el2.style.transform = 'translate(-50%,-50%) scale(1.15)';
+    }, 3000);
+    levelupTimer2 = setTimeout(function(){
       el2.style.transform = 'translate(-50%,-50%) scale(0.9)';
-    }, 1800);
+    }, 3300);
   }
 
   el.overlay.addEventListener('pointerdown', function(e){
@@ -679,6 +755,7 @@ window.onerror = function(msg, url, line, col){
     if (G.state === 'PAUSED') togglePause();
   });
 
+  /* ---------- Логика ---------- */
   function startGame(){
     newBoard();
     G.score = 0; G.level = 1; G.piece = null;
@@ -686,6 +763,7 @@ window.onerror = function(msg, url, line, col){
     G.queue = [randomLetter(), randomLetter()];
     G.highlight = []; G.busy = false; G.phase = null;
     G.deleting = []; G.fallMoves = [];
+    G.lockFx = null; G.goFx = null;
     G.state = 'PLAYING';
     updateUI(); updatePreviews();
     hideOverlay();
@@ -696,11 +774,15 @@ window.onerror = function(msg, url, line, col){
     var letter = G.queue.shift();
     G.queue.push(randomLetter());
     updatePreviews();
-    G.piece = { col: CONFIG.SPAWN_COL, row: 0, visualRow: 0, letter: letter, timer: 0 };
+    G.piece = {
+      col: CONFIG.SPAWN_COL, row: 0, visualRow: 0, letter: letter, timer: 0,
+      spawnStart: performance.now()
+    };
   }
   function lockPiece(){
     var p = G.piece;
     board[p.row][p.col] = { letter: p.letter, id: nextCellId++ };
+    G.lockFx = { r: p.row, c: p.col, start: performance.now() };
     G.piece = null;
     Audio8.lock();
     refreshHighlight();
@@ -729,6 +811,7 @@ window.onerror = function(msg, url, line, col){
     if (words.length === 0){ toast('НЕТ СЛОВ'); return; }
 
     Audio8.go();
+    G.goFx = performance.now();
     var gain = scoreWords(words);
     var maxBonus = 1;
     for (var mb=0; mb<words.length; mb++){
@@ -772,8 +855,9 @@ window.onerror = function(msg, url, line, col){
         board[r][c] = null;
       }
       var oldLv = G.level;
-      G.score = Math.min(CONFIG.MAX_SCORE, G.score + gain);
+      G.score = G.score + gain;                     // без ограничения по очкам
       var newLv = levelForScore(G.score);
+      if (newLv > CONFIG.MAX_LEVEL) newLv = CONFIG.MAX_LEVEL;
       updateUI();
 
       var leveledUp = newLv > oldLv;
@@ -792,7 +876,7 @@ window.onerror = function(msg, url, line, col){
       setTimeout(function(){
         G.phase = null; G.fallMoves = []; G.deleting = [];
         G.busy = false; refreshHighlight();
-        if (G.score >= CONFIG.MAX_SCORE) victory();
+        if (G.level >= CONFIG.MAX_LEVEL) victory();
       }, releaseDelay);
     }, 155);
   }
@@ -824,9 +908,9 @@ window.onerror = function(msg, url, line, col){
     var recordBadge = isRecord
       ? '<div style="display:inline-block;padding:6px 16px;border-radius:999px;' +
         'background:linear-gradient(to bottom,#ffd66b,#f0a83a);color:#3a2400;' +
-        'font-weight:900;font-size:12px;letter-spacing:2px;margin-top:6px;' +
+        'font-weight:900;font-size:12px;letter-spacing:2px;margin-top:8px;' +
         'box-shadow:0 3px 0 #a06f18,0 0 24px rgba(255,200,80,.6)">НОВЫЙ РЕКОРД!</div>'
-      : '<div style="margin-top:6px;font-size:12px;color:#7a86a8;letter-spacing:1px">лучший: ' + best.toLocaleString('ru-RU') + '</div>';
+      : '<div style="margin-top:8px;font-size:12px;color:#7a86a8;letter-spacing:1px">лучший: ' + best.toLocaleString('ru-RU') + '</div>';
     showOverlay(
       '<h1 style="font-size:32px;letter-spacing:6px">ИГРА ОКОНЧЕНА</h1>' +
       '<div style="margin-top:12px;padding:18px 32px;border-radius:20px;' +
@@ -834,6 +918,7 @@ window.onerror = function(msg, url, line, col){
         'box-shadow:0 12px 40px rgba(0,0,0,.5)">' +
         '<div style="font-size:11px;letter-spacing:4px;color:#7a86a8">СЧЁТ</div>' +
         '<div style="font-size:38px;font-weight:900;color:#fff;margin-top:4px;font-variant-numeric:tabular-nums">' + G.score.toLocaleString('ru-RU') + '</div>' +
+        '<div style="font-size:12px;color:#b8c2dc;margin-top:8px">Планета: <b>' + planetForLevel(G.level) + '</b></div>' +
         recordBadge +
       '</div>' +
       '<p style="margin-top:12px">Отлично получается, попробуй ещё раз!</p>' +
@@ -845,13 +930,13 @@ window.onerror = function(msg, url, line, col){
     G.state = 'VICTORY'; Audio8.victory();
     showOverlay(
       '<h1>ПОБЕДА!</h1>' +
+      '<p style="margin-top:8px">Ты прошёл все 30 планет — от Меркурия до Селены!</p>' +
       '<div style="margin-top:12px;padding:18px 32px;border-radius:20px;' +
         'background:rgba(20,16,50,.85);border:1px solid rgba(255,200,80,.35);' +
         'box-shadow:0 12px 40px rgba(0,0,0,.5),0 0 60px rgba(255,200,80,.3)">' +
-        '<div style="font-size:11px;letter-spacing:4px;color:#7a86a8">СЧЁТ</div>' +
+        '<div style="font-size:11px;letter-spacing:4px;color:#7a86a8">ФИНАЛЬНЫЙ СЧЁТ</div>' +
         '<div style="font-size:38px;font-weight:900;color:#ffd66b;margin-top:4px;font-variant-numeric:tabular-nums">' + G.score.toLocaleString('ru-RU') + '</div>' +
       '</div>' +
-      '<p style="margin-top:12px">Ты набрал 1 000 000 очков!</p>' +
       '<button id="againBtn">ЕЩЁ РАЗ</button>'
     );
     document.getElementById('againBtn').onclick = startGame;
@@ -866,14 +951,22 @@ window.onerror = function(msg, url, line, col){
     }
   }
 
+  /* ---------- Управление ---------- */
   var keys = { down: false };
+
   document.addEventListener('keydown', function(e){
+    // Enter = GO, жёстко перехватываем, чтобы не улетало в кнопку
+    if (e.key === 'Enter'){
+      e.preventDefault();
+      e.stopPropagation();
+      doGO();
+      return;
+    }
     if (e.repeat && e.key !== 'ArrowDown') return;
     switch (e.key){
       case 'ArrowLeft':  moveHorizontal(-1); e.preventDefault(); break;
       case 'ArrowRight': moveHorizontal(1);  e.preventDefault(); break;
       case 'ArrowDown':  keys.down = true; e.preventDefault(); break;
-      case 'Enter':      doGO(); e.preventDefault(); break;
       case ' ':          togglePause(); e.preventDefault(); break;
       case 'r': case 'R': if (G.state === 'GAMEOVER' || G.state === 'VICTORY') startGame(); break;
     }
@@ -887,7 +980,9 @@ window.onerror = function(msg, url, line, col){
     (function(btn){
       var act = btn.getAttribute('data-act');
       btn.addEventListener('pointerdown', function(e){
+        // preventDefault не даёт кнопке получить фокус → Enter не будет её триггерить
         e.preventDefault();
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
         if (G.state === 'READY'){ startGame(); return; }
         if (G.state !== 'PLAYING') return;
         if (act === 'left')  moveHorizontal(-1);
@@ -918,7 +1013,9 @@ window.onerror = function(msg, url, line, col){
   });
 
   function update(dt){
+    G.pulseT += dt;
     var lv = levelForScore(G.score);
+    if (lv > CONFIG.MAX_LEVEL) lv = CONFIG.MAX_LEVEL;
     if (lv !== G.level){ G.level = lv; updateUI(); }
     if (G.state !== 'PLAYING') return;
     if (G.busy) return;
@@ -965,7 +1062,7 @@ window.onerror = function(msg, url, line, col){
         '<span><b style="color:#FF3E7F">●</b> малиновые ×10</span>' +
       '</div>' +
       '<p style="font-size:12px;color:#7a86a8;margin-top:14px">← → двигать · ↓ ускорить · Enter = GO · Space = пауза</p>' +
-      '<p style="font-size:11px;color:#5a6b8f;margin-top:6px">Словарь: ' + count + ' слов · Уровень каждые 3000 очков</p>' +
+      '<p style="font-size:11px;color:#5a6b8f;margin-top:6px">30 планет · Победа на Селене · Словарь: ' + count + ' слов</p>' +
       '<button id="startBtn">ИГРАТЬ</button>'
     );
     document.getElementById('startBtn').onclick = startGame;
