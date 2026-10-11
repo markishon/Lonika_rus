@@ -1,10 +1,8 @@
 /* =====================================================================
-   ЛОНИКА — движок v10
-   + все 4 направления с 1-го уровня, диагонали на 9-12
-   + 30 планет-ачивок, победа на 30-м уровне
-   + торжественный переход уровня (3.5 сек)
-   + анимации: спавн, фиксация, GO-вспышка, пульсация подсветки
-   + фикс конфликта Enter с кнопкой GO
+   ЛОНИКА — движок v11
+   + падение на 30% медленнее (BASE_INTERVAL: 1872)
+   + игровое поле центрируется по вертикали
+   + убрано "Космические слова"
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -25,21 +23,15 @@ window.onerror = function(msg, url, line, col){
   var CONFIG = {
     N: 11,
     SPAWN_COL: 5,
-    BASE_INTERVAL: 1440,
+    BASE_INTERVAL: 1872,       // было 1440 → теперь на 30% медленнее
     SPEED_FACTOR: 1.1,
     MAX_SPEED_LEVEL: 20,
     MIN_WORD_LEN: 3,
     SCORE_MULT: 10,
-    MAX_LEVEL: 30,             // победа на 30-м уровне
+    MAX_LEVEL: 30,
     LEVEL_STEP: 3000,
-    LEVELUP_PAUSE_MS: 3500,    // торжественный переход 3.5 сек
+    LEVELUP_PAUSE_MS: 3500,
 
-    /* Направления чтения:
-       ур. 1–8: → ← ↑ ↓
-       ур. 9:   + ↗
-       ур. 10:  + ↘
-       ур. 11:  + ↖
-       ур. 12+: + ↙ (все 8) */
     DIR_GROUPS: [
       { max: 8,     dirs: ['right','left','up','down'] },
       { max: 9,     dirs: ['right','left','up','down','upRight'] },
@@ -48,7 +40,6 @@ window.onerror = function(msg, url, line, col){
       { max: 99999, dirs: ['right','left','up','down','upRight','downRight','upLeft','downLeft'] }
     ],
 
-    /* 30 планет — от простой к сложной */
     PLANETS: [
       'Меркурий','Венера','Земля','Марс','Юпитер','Сатурн','Уран','Нептун','Плутон','Харон',
       'Луна','Фобос','Деймос','Ио','Европа','Ганимед','Каллисто','Титан','Энцелад','Мимас',
@@ -285,7 +276,6 @@ window.onerror = function(msg, url, line, col){
     return CONFIG.PLANETS[i];
   }
 
-  /* ---------- Звук ---------- */
   var Audio8 = (function(){
     var ctx = null, enabled = true, unlocked = false;
     function ac(){
@@ -337,7 +327,6 @@ window.onerror = function(msg, url, line, col){
         });
       },
       levelup: function(){
-        // длинная торжественная фанфара ~1.5 сек
         var notes = [523, 659, 784, 1046, 1318, 1568, 2093];
         notes.forEach(function(f,i){
           setTimeout(function(){ beep(f, 0.14, 'triangle', 0.10); }, i*110);
@@ -369,9 +358,7 @@ window.onerror = function(msg, url, line, col){
   var G = {
     state: 'READY', score: 0, level: 1, piece: null, queue: [],
     highlight: [], busy: false, phase: null, fallMoves: [], deleting: [],
-    lockFx: null,        // вспышка при фиксации
-    goFx: null,          // вспышка при GO
-    pulseT: 0            // время для пульсации подсветки
+    lockFx: null, goFx: null, pulseT: 0
   };
 
   var canvas = document.getElementById('board');
@@ -384,7 +371,7 @@ window.onerror = function(msg, url, line, col){
     var previewsEl = document.getElementById('previews');
     var headerEl = document.querySelector('header');
     var controlsH = controlsEl ? controlsEl.offsetHeight : 80;
-    var previewsH = previewsEl ? previewsEl.offsetHeight : 40;
+    var previewsH = previewsEl ? previewsEl.offsetHeight : 50;
     var headerH = headerEl ? headerEl.offsetHeight : 60;
     var availW = Math.min(window.innerWidth - 24, 480);
     var availH = window.innerHeight - headerH - previewsH - controlsH - 60;
@@ -476,7 +463,6 @@ window.onerror = function(msg, url, line, col){
     ctx.stroke();
 
     if (mode === 'highlight'){
-      // пульсирующее свечение
       var pulse = 0.5 + 0.5 * Math.sin(G.pulseT / 220);
       var glow = glowColorFor(tier);
       ctx.shadowColor = glow;
@@ -573,7 +559,6 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // падающий кубик с анимацией появления
     if (G.piece && (G.state === 'PLAYING') && !G.busy){
       var p = G.piece;
       var spawnT = 1;
@@ -590,7 +575,6 @@ window.onerror = function(msg, url, line, col){
       });
     }
 
-    // вспышка при фиксации
     if (G.lockFx){
       var lt = (now - G.lockFx.start) / 350;
       if (lt >= 1){ G.lockFx = null; }
@@ -598,16 +582,15 @@ window.onerror = function(msg, url, line, col){
         var lx = G.lockFx.c * cellSize + cellSize / 2;
         var ly = G.lockFx.r * cellSize + cellSize / 2;
         var radius = cellSize * (0.6 + lt * 0.9);
-        var alpha = (1 - lt) * 0.7;
+        var alphaL = (1 - lt) * 0.7;
         var grad = ctx.createRadialGradient(lx, ly, 0, lx, ly, radius);
-        grad.addColorStop(0, 'rgba(255,255,255,' + alpha + ')');
+        grad.addColorStop(0, 'rgba(255,255,255,' + alphaL + ')');
         grad.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = grad;
         ctx.fillRect(lx - radius, ly - radius, radius * 2, radius * 2);
       }
     }
 
-    // вспышка при GO
     if (G.goFx){
       var gt = (now - G.goFx) / 400;
       if (gt >= 1){ G.goFx = null; }
@@ -618,7 +601,6 @@ window.onerror = function(msg, url, line, col){
     }
   }
 
-  /* ---------- UI ---------- */
   var el = {
     score:   document.getElementById('score'),
     level:   document.getElementById('level'),
@@ -695,7 +677,6 @@ window.onerror = function(msg, url, line, col){
     el.overlay.innerHTML = '';
   }
 
-  /* ---------- Торжественный баннер уровня ---------- */
   var levelupEl = null;
   var levelupTimer1 = null;
   var levelupTimer2 = null;
@@ -755,7 +736,6 @@ window.onerror = function(msg, url, line, col){
     if (G.state === 'PAUSED') togglePause();
   });
 
-  /* ---------- Логика ---------- */
   function startGame(){
     newBoard();
     G.score = 0; G.level = 1; G.piece = null;
@@ -855,7 +835,7 @@ window.onerror = function(msg, url, line, col){
         board[r][c] = null;
       }
       var oldLv = G.level;
-      G.score = G.score + gain;                     // без ограничения по очкам
+      G.score = G.score + gain;
       var newLv = levelForScore(G.score);
       if (newLv > CONFIG.MAX_LEVEL) newLv = CONFIG.MAX_LEVEL;
       updateUI();
@@ -951,11 +931,9 @@ window.onerror = function(msg, url, line, col){
     }
   }
 
-  /* ---------- Управление ---------- */
   var keys = { down: false };
 
   document.addEventListener('keydown', function(e){
-    // Enter = GO, жёстко перехватываем, чтобы не улетало в кнопку
     if (e.key === 'Enter'){
       e.preventDefault();
       e.stopPropagation();
@@ -980,7 +958,6 @@ window.onerror = function(msg, url, line, col){
     (function(btn){
       var act = btn.getAttribute('data-act');
       btn.addEventListener('pointerdown', function(e){
-        // preventDefault не даёт кнопке получить фокус → Enter не будет её триггерить
         e.preventDefault();
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
         if (G.state === 'READY'){ startGame(); return; }
@@ -1053,7 +1030,6 @@ window.onerror = function(msg, url, line, col){
     newBoard(); resize(); updateUI();
     var count = DICT_RAW.length;
     showOverlay(
-      '<div style="font-size:11px;letter-spacing:6px;color:#8fa3c8;opacity:.65;margin-bottom:2px">КОСМИЧЕСКИЕ СЛОВА</div>' +
       '<h1>ЛОНИКА</h1>' +
       '<p style="margin-top:10px">Собирай слова из падающих букв.<br>Слова НЕ удаляются сами — нажми <b style="color:#ffd66b">GO</b>, когда готов.</p>' +
       '<div style="margin-top:16px;display:flex;gap:14px;font-size:12px;color:#b8c2dc;flex-wrap:wrap;justify-content:center">' +
