@@ -1,8 +1,6 @@
 /* =====================================================================
-   ЛОНИКА — движок v11
-   + падение на 30% медленнее (BASE_INTERVAL: 1872)
-   + игровое поле центрируется по вертикали
-   + убрано "Космические слова"
+   ЛОНИКА — движок v12
+   + баланс: ослабленное комбо (max ×3), LEVEL_STEP = 10000
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -23,14 +21,26 @@ window.onerror = function(msg, url, line, col){
   var CONFIG = {
     N: 11,
     SPAWN_COL: 5,
-    BASE_INTERVAL: 1872,       // было 1440 → теперь на 30% медленнее
+    BASE_INTERVAL: 1872,
     SPEED_FACTOR: 1.1,
     MAX_SPEED_LEVEL: 20,
     MIN_WORD_LEN: 3,
     SCORE_MULT: 10,
     MAX_LEVEL: 30,
-    LEVEL_STEP: 3000,
+    LEVEL_STEP: 10000,           // было 3000 → теперь победа = 290 000
     LEVELUP_PAUSE_MS: 3500,
+
+    /* Комбо: 1 + 0.3 * (N-1), максимум ×3.
+       1 → 1.0
+       2 → 1.3
+       3 → 1.6
+       4 → 1.9
+       5 → 2.2
+       6 → 2.5
+       7 → 2.8
+       8+ → 3.0 */
+    COMBO_STEP: 0.3,
+    COMBO_MAX:  3.0,
 
     DIR_GROUPS: [
       { max: 8,     dirs: ['right','left','up','down'] },
@@ -250,6 +260,14 @@ window.onerror = function(msg, url, line, col){
     return true;
   }
 
+  /* ---------- Очки ----------
+     Базово: Σ(длина² × 10 × бонус_буквы)
+     Комбо: ×min(3, 1 + 0.3 × (N - 1)) */
+  function comboMultiplier(n){
+    if (n <= 1) return 1;
+    var m = 1 + CONFIG.COMBO_STEP * (n - 1);
+    return Math.min(CONFIG.COMBO_MAX, m);
+  }
   function scoreWords(words){
     var sum = 0;
     for (var i=0;i<words.length;i++){
@@ -257,7 +275,8 @@ window.onerror = function(msg, url, line, col){
       var len = w.word.length;
       sum += len * len * CONFIG.SCORE_MULT * w.bonus;
     }
-    return Math.round(sum * words.length);
+    var combo = comboMultiplier(words.length);
+    return Math.round(sum * combo);
   }
 
   function levelForScore(s){ return Math.floor(s / CONFIG.LEVEL_STEP) + 1; }
@@ -800,13 +819,14 @@ window.onerror = function(msg, url, line, col){
     if (maxBonus >= 10) Audio8.superBonus();
     else if (maxBonus >= 5) Audio8.bonus();
 
-    var comboTag = ' ×' + words.length + ' комбо';
+    var combo = comboMultiplier(words.length);
+    var comboTag = combo > 1 ? ' ×' + combo.toFixed(1) + ' комбо' : '';
     if (maxBonus >= 10){
       toast('БОНУС ×' + maxBonus + comboTag + '  +' + gain, 1500, '#ff8aa6');
     } else if (maxBonus >= 5){
       toast('БОНУС ×' + maxBonus + comboTag + '  +' + gain, 1400, '#d8b0ff');
-    } else if (words.length > 1){
-      toast('КОМБО ×' + words.length + '  +' + gain, 1100, '#ffd66b');
+    } else if (combo > 1){
+      toast('КОМБО ×' + combo.toFixed(1) + '  +' + gain, 1100, '#ffd66b');
     } else {
       toast('+' + gain, 900, '#ffd66b');
     }
