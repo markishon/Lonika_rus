@@ -6,99 +6,183 @@
 <title>ЛОНИКА</title>
 <style>
   :root{
-    --bg-grad-top:#131a2e;
-    --bg-grad-bottom:#0a0f1c;
-    --board-bg:#1a2138;
-    --board-border:#2a3354;
-    --cell-empty:#232b47;
-    --cell-edge:#2f3858;
     --text:#ffffff;
-    --text-dim:#8fa3c8;
+    --text-dim:#b8c2dc;
+    --text-muted:#7a86a8;
     --text-label:#5a6b8f;
-    --key-top:#f7f9ff;
-    --key-bottom:#dbe3f4;
-    --key-edge:#c4cde0;
-    --key-shadow:#8b96b3;
-    --key-letter:#1e2a4a;
-    --go-top:#ffd66b;
-    --go-bottom:#f0a83a;
-    --go-edge:#e0a83a;
-    --go-shadow:#a06f18;
-    --go-letter:#3a2400;
-    --radius-key:14px;
-    --radius-board:20px;
-    --radius-pill:999px;
+    --gold-top:#ffe28a;
+    --gold-bottom:#f0a83a;
+    --gold-edge:#e0a83a;
+    --gold-shadow:#a06f18;
+    --gold-letter:#3a2400;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
-  html,body{margin:0;padding:0;height:100%;color:var(--text);
-    background:radial-gradient(ellipse at top, var(--bg-grad-top) 0%, var(--bg-grad-bottom) 70%);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden}
-  #app{display:flex;flex-direction:column;align-items:center;height:100vh;height:100dvh;padding:8px;gap:8px}
-  header{display:flex;justify-content:space-between;width:100%;max-width:560px;padding:0 6px}
-  .stat{display:flex;flex-direction:column;font-size:11px;letter-spacing:3px;
-    color:var(--text-dim);text-transform:uppercase}
-  .stat b{display:block;margin-top:4px;font-size:26px;font-weight:900;letter-spacing:0;
-    color:var(--text);font-variant-numeric:tabular-nums;line-height:1.05}
-  #dirs{font-size:13px;letter-spacing:3px;color:var(--text-label);margin-top:4px;line-height:1;font-weight:700}
-  #dirs span{color:#2a3354}
-  #dirs span.on{color:#7cc0ff}
+  html,body{
+    margin:0;padding:0;height:100%;color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    overflow:hidden;
+    background-color:#0a0620;
+  }
+  /* Космический фон */
+  body::before{
+    content:'';position:fixed;inset:0;z-index:-2;
+    background:
+      radial-gradient(ellipse 70% 50% at 20% 12%, rgba(120,80,220,.55) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 45% at 85% 28%, rgba(255,90,160,.38) 0%, transparent 55%),
+      radial-gradient(ellipse 110% 70% at 50% 100%, rgba(255,110,180,.45) 0%, transparent 60%),
+      radial-gradient(ellipse 100% 80% at 50% 40%, #241245 0%, #12082a 55%, #06041a 100%);
+  }
+  /* Звёзды */
+  body::after{
+    content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background-image:
+      radial-gradient(1px 1px at 8% 12%, #fff 100%, transparent),
+      radial-gradient(1px 1px at 22% 6%, #fff 100%, transparent),
+      radial-gradient(1.5px 1.5px at 38% 18%, #fff 100%, transparent),
+      radial-gradient(1px 1px at 54% 9%, #fff 100%, transparent),
+      radial-gradient(1px 1px at 72% 15%, #fff 100%, transparent),
+      radial-gradient(1.5px 1.5px at 88% 8%, #fff 100%, transparent),
+      radial-gradient(1px 1px at 14% 34%, #fff 100%, transparent),
+      radial-gradient(1px 1px at 62% 30%, #fff 100%, transparent),
+      radial-gradient(1.5px 1.5px at 92% 42%, #fff 100%, transparent),
+      radial-gradient(1px 1px at 30% 52%, #fff 100%, transparent),
+      radial-gradient(1px 1px at 78% 55%, #fff 100%, transparent),
+      radial-gradient(1px 1px at 4% 68%, #fff 100%, transparent),
+      radial-gradient(1.5px 1.5px at 48% 72%, #fff 100%, transparent),
+      radial-gradient(1px 1px at 88% 78%, #fff 100%, transparent),
+      radial-gradient(1px 1px at 26% 88%, #fff 100%, transparent),
+      radial-gradient(1px 1px at 66% 92%, #fff 100%, transparent);
+    opacity:.85;
+  }
+  #app{
+    display:flex;flex-direction:column;align-items:center;
+    height:100vh;height:100dvh;padding:10px;gap:10px;
+    position:relative;z-index:1;
+  }
+  header{display:flex;justify-content:space-between;width:100%;max-width:480px;padding:0 8px}
+  .stat{
+    display:flex;flex-direction:column;
+    font-size:12px;letter-spacing:3px;
+    color:var(--text-muted);
+    text-transform:uppercase;font-weight:700;
+  }
+  .stat b{
+    display:block;margin-top:2px;
+    font-size:28px;font-weight:900;letter-spacing:0;
+    color:var(--text);
+    font-variant-numeric:tabular-nums;
+    line-height:1.1;
+  }
+  .stat.right{align-items:flex-end}
+  #dirs{
+    font-size:13px;letter-spacing:4px;
+    color:#2a3354;margin-top:4px;
+    line-height:1;font-weight:700;
+  }
+  #dirs span.on{color:#7cc0ff;text-shadow:0 0 8px #4A90FF}
   #stage{position:relative}
-  canvas{display:block;border-radius:var(--radius-board);
-    background:var(--board-bg);border:1px solid var(--board-border);
-    box-shadow:0 20px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04)}
-  #previews{display:flex;align-items:center;gap:10px;font-size:11px;letter-spacing:3px;
-    color:var(--text-dim);text-transform:uppercase}
-  #previews .pv{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;
-    justify-content:center;font-weight:800;font-size:18px;
-    background:linear-gradient(to bottom,#ffffff,#dfe4ef);color:#1e2a4a;
-    box-shadow:0 3px 0 #9aa5bf, 0 6px 12px rgba(0,0,0,.3)}
-  #controls{display:flex;justify-content:space-between;width:100%;max-width:560px;padding:0 6px;gap:12px}
+  canvas{
+    display:block;border-radius:18px;
+    background:rgba(15,20,40,.7);
+    border:1px solid rgba(100,120,200,.18);
+    box-shadow:
+      0 20px 60px rgba(0,0,0,.6),
+      0 0 80px rgba(120,80,220,.25),
+      inset 0 1px 0 rgba(255,255,255,.06);
+    backdrop-filter:blur(6px);
+  }
+  #previews{
+    display:flex;align-items:center;gap:10px;
+    font-size:11px;letter-spacing:3px;
+    color:var(--text-muted);text-transform:uppercase;font-weight:700;
+  }
+  #previews .pv{
+    width:42px;height:42px;border-radius:11px;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:20px;
+    background:linear-gradient(to bottom,#ffffff,#dce4f0);
+    color:#1e2a4a;
+    box-shadow:0 3px 0 #9aa5bf,0 6px 12px rgba(0,0,0,.4);
+  }
+  #controls{
+    display:flex;justify-content:space-between;
+    width:100%;max-width:480px;padding:0 8px;gap:12px;
+  }
   .grp{display:flex;gap:12px}
-  .key{width:66px;height:66px;border-radius:var(--radius-key);
-    border:1px solid var(--key-edge);
-    background:linear-gradient(to bottom, var(--key-top), var(--key-bottom));
-    color:var(--key-letter);font-size:26px;font-weight:800;
-    display:flex;align-items:center;justify-content:center;cursor:pointer;
-    box-shadow:0 4px 0 var(--key-shadow), 0 8px 18px rgba(0,0,0,.35);
+  .key{
+    width:68px;height:68px;border-radius:16px;
+    border:1px solid #c8d0e2;
+    background:linear-gradient(to bottom,#f7f9ff,#dbe3f4);
+    color:#1e2a4a;font-size:28px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;
+    box-shadow:0 4px 0 #8a94b0,0 8px 20px rgba(0,0,0,.4);
     transition:transform .06s ease, box-shadow .06s ease;
-    -webkit-appearance:none;appearance:none;padding:0}
-  .key:active{transform:translateY(3px);
-    box-shadow:0 1px 0 var(--key-shadow), 0 4px 10px rgba(0,0,0,.35)}
-  .key.go{background:linear-gradient(to bottom, var(--go-top), var(--go-bottom));
-    border-color:var(--go-edge);color:var(--go-letter);
-    font-size:19px;letter-spacing:1px;
-    box-shadow:0 4px 0 var(--go-shadow), 0 8px 18px rgba(0,0,0,.35)}
-  .key.go:active{box-shadow:0 1px 0 var(--go-shadow), 0 4px 10px rgba(0,0,0,.35)}
-  @media (max-width:480px){.key{width:60px;height:60px}}
-  #overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
-    justify-content:center;background:rgba(8,12,26,.88);border-radius:var(--radius-board);
-    text-align:center;padding:24px;gap:14px;backdrop-filter:blur(8px);cursor:pointer;z-index:10}
+    -webkit-appearance:none;appearance:none;padding:0;font-family:inherit;
+  }
+  .key:active{
+    transform:translateY(3px);
+    box-shadow:0 1px 0 #8a94b0,0 4px 10px rgba(0,0,0,.4);
+  }
+  .key.go{
+    background:linear-gradient(to bottom,#ffd66b,#f0a83a);
+    border-color:#e0a83a;color:#3a2400;
+    font-size:20px;letter-spacing:1px;
+    box-shadow:0 4px 0 #a06f18,0 8px 20px rgba(0,0,0,.4),0 0 24px rgba(255,200,80,.4);
+  }
+  .key.go:active{box-shadow:0 1px 0 #a06f18,0 4px 10px rgba(0,0,0,.4)}
+  @media (max-width:480px){
+    .key{width:62px;height:62px;font-size:24px}
+    .key.go{font-size:18px}
+  }
+  #overlay{
+    position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
+    justify-content:center;background:rgba(8,6,24,.92);border-radius:18px;
+    text-align:center;padding:22px;gap:12px;backdrop-filter:blur(10px);
+    z-index:10;overflow-y:auto;
+  }
   #overlay.on{display:flex}
-  #overlay h1{margin:0;font-size:38px;letter-spacing:8px;
-    background:linear-gradient(90deg,#7cc0ff,#c88bff,#ffb86b);
-    -webkit-background-clip:text;background-clip:text;color:transparent}
-  #overlay p{margin:0;color:var(--text-dim);font-size:14px;max-width:340px;line-height:1.5}
-  #overlay button{margin-top:8px;padding:14px 32px;border-radius:var(--radius-pill);
-    border:0;cursor:pointer;font-weight:900;font-size:17px;letter-spacing:1.5px;
-    background:linear-gradient(to bottom, var(--go-top), var(--go-bottom));
-    color:var(--go-letter);
-    box-shadow:0 4px 0 var(--go-shadow), 0 8px 18px rgba(0,0,0,.35);
-    transition:transform .06s ease, box-shadow .06s ease}
-  #overlay button:active{transform:translateY(3px);
-    box-shadow:0 1px 0 var(--go-shadow), 0 4px 10px rgba(0,0,0,.35)}
-  #toast{position:absolute;left:50%;top:14%;transform:translateX(-50%);
-    padding:10px 20px;border-radius:var(--radius-pill);
-    background:rgba(0,0,0,.75);color:var(--go-top);
+  #overlay h1{
+    margin:0;font-size:44px;letter-spacing:10px;font-weight:900;
+    background:linear-gradient(90deg,#7cc0ff 0%,#c88bff 50%,#ff9ec0 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 24px rgba(200,140,255,.7));
+  }
+  #overlay p{
+    margin:0;color:var(--text-dim);font-size:14px;
+    max-width:340px;line-height:1.55;
+  }
+  #overlay button{
+    margin-top:8px;padding:16px 44px;border-radius:999px;
+    border:0;cursor:pointer;font-weight:900;font-size:18px;letter-spacing:1.5px;
+    background:linear-gradient(to bottom,#ffd66b,#f0a83a);
+    color:#3a2400;
+    box-shadow:0 5px 0 #a06f18,0 10px 24px rgba(0,0,0,.4),0 0 30px rgba(255,200,80,.4);
+    transition:transform .06s ease, box-shadow .06s ease;
+    font-family:inherit;
+  }
+  #overlay button:active{
+    transform:translateY(3px);
+    box-shadow:0 2px 0 #a06f18,0 5px 12px rgba(0,0,0,.4);
+  }
+  #toast{
+    position:absolute;left:50%;top:14%;transform:translateX(-50%);
+    padding:10px 22px;border-radius:999px;
+    background:rgba(0,0,0,.8);
+    border:1px solid rgba(255,214,107,.35);
+    color:#ffd66b;
     font-weight:800;letter-spacing:2px;font-size:15px;
-    opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+    opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;
+    box-shadow:0 8px 24px rgba(0,0,0,.5);
+  }
   #toast.on{opacity:1}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <div class="stat">СЧЁТ<b id="score">0</b></div>
-    <div class="stat" style="align-items:flex-end">УРОВЕНЬ<b id="level">1</b>
+    <div class="stat">Счёт<b id="score">0</b></div>
+    <div class="stat right">Уровень<b id="level">1</b>
       <div id="dirs"></div>
     </div>
   </header>
@@ -119,7 +203,6 @@
     </div>
   </div>
 </div>
-
 <script src="dictionary.js"></script>
 <script src="game.js"></script>
 </body>
