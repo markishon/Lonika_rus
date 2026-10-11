@@ -50,6 +50,7 @@
     display:flex;flex-direction:column;align-items:center;
     height:100vh;height:100dvh;padding:10px;gap:8px;
     position:relative;z-index:1;
+    justify-content:space-between;
   }
   header{display:flex;justify-content:space-between;width:100%;max-width:480px;padding:0 8px}
   .stat{
@@ -78,6 +79,13 @@
     line-height:1;font-weight:700;
   }
   #dirs span.on{color:#7cc0ff;text-shadow:0 0 8px #4A90FF}
+
+  /* СРЕДНЯЯ СЕКЦИЯ — игровое поле центрируется */
+  #middle{
+    flex:1 1 auto;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:12px;width:100%;min-height:0;
+  }
   #stage{position:relative}
   canvas{
     display:block;border-radius:18px;
@@ -106,6 +114,7 @@
   #controls{
     display:flex;justify-content:space-between;
     width:100%;max-width:480px;padding:0 8px;gap:12px;
+    flex:0 0 auto;
   }
   .grp{display:flex;gap:12px}
   .key{
@@ -190,12 +199,14 @@
       <div id="dirs"></div>
     </div>
   </header>
-  <div id="stage">
-    <canvas id="board"></canvas>
-    <div id="overlay"></div>
-    <div id="toast"></div>
+  <div id="middle">
+    <div id="stage">
+      <canvas id="board"></canvas>
+      <div id="overlay"></div>
+      <div id="toast"></div>
+    </div>
+    <div id="previews"><span>Далее</span><div class="pv" id="pv0">·</div><div class="pv" id="pv1">·</div></div>
   </div>
-  <div id="previews"><span>Далее</span><div class="pv" id="pv0">·</div><div class="pv" id="pv1">·</div></div>
   <div id="controls">
     <div class="grp">
       <button type="button" class="key" data-act="left">←</button>
