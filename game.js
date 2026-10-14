@@ -1,6 +1,8 @@
 /* =====================================================================
-   ЛОНИКА — движок v15
+   ЛОНИКА — движок v16 (финальный на сегодня)
+   + BASE_INTERVAL: 1872 (скорость падения — как было, НЕ тронуто)
    + LOCK_DELAY_MS: 1000 (окно фиксации 1 сек)
+   + сложные буквы растут с уровня: 1% на ур.1 → 10% на ур.30
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -21,8 +23,8 @@ window.onerror = function(msg, url, line, col){
   var CONFIG = {
     N: 11,
     SPAWN_COL: 5,
-    BASE_INTERVAL: 1872,
-    LOCK_DELAY_MS: 1000,
+    BASE_INTERVAL: 1872,         // скорость падения — как было, НЕ тронуто
+    LOCK_DELAY_MS: 1000,         // окно фиксации: 1 секунда
     SPEED_FACTOR: 1.1,
     MAX_SPEED_LEVEL: 20,
     MIN_WORD_LEN: 3,
@@ -34,9 +36,9 @@ window.onerror = function(msg, url, line, col){
     COMBO_STEP: 0.3,
     COMBO_MAX:  3.0,
 
-    COMPLEX_MIN_FRAC: 0.01,
-    COMPLEX_MAX_FRAC: 0.10,
-    SIGNS_FRACTION:   0.05,
+    COMPLEX_MIN_FRAC: 0.01,      // сложных букв на ур. 1  = 1%
+    COMPLEX_MAX_FRAC: 0.10,      // сложных букв на ур. 30 = 10%
+    SIGNS_FRACTION:   0.05,      // из них знаки = 5% (ь, ъ)
 
     DIR_GROUPS: [
       { max: 8,     dirs: ['right','left','up','down'] },
@@ -841,7 +843,7 @@ window.onerror = function(msg, url, line, col){
     if (nc < 0 || nc >= N) return;
     if (!canPlace(G.piece.row, nc)) return;
     G.piece.col = nc;
-    G.piece.lockStart = null;   // сдвиг сбрасывает окно фиксации
+    G.piece.lockStart = null;
     Audio8.move();
   }
   function softDropStep(){
@@ -1072,7 +1074,6 @@ window.onerror = function(msg, url, line, col){
     var eff = keys.down ? base * CONFIG.SOFT_DROP : base;
     G.piece.timer += dt;
 
-    // Падение по таймеру (пока есть куда падать)
     var safety = 8;
     while (G.piece.timer >= eff && safety-- > 0){
       if (canMoveTo(G.piece.col, G.piece.row + 1)){
@@ -1084,7 +1085,6 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // Окно фиксации: если внизу занято — стартуем таймер
     if (!canMoveTo(G.piece.col, G.piece.row + 1)){
       if (!G.piece.lockStart){
         G.piece.lockStart = performance.now();
@@ -1092,7 +1092,6 @@ window.onerror = function(msg, url, line, col){
         lockPiece();
         return;
       }
-      // Пока идёт окно фиксации — визуальное положение не меняется
       G.piece.visualRow = G.piece.row;
     } else {
       G.piece.lockStart = null;
