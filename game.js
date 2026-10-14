@@ -1,6 +1,7 @@
 /* =====================================================================
-   ЛОНИКА — движок v12
-   + баланс: ослабленное комбо (max ×3), LEVEL_STEP = 10000
+   ЛОНИКА — движок v13
+   + фиксация буквы ускорена в 2 раза (BASE_INTERVAL: 936)
+   + сложные буквы растут с уровнем: 1% на ур.1 → 10% на ур.30
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -21,26 +22,25 @@ window.onerror = function(msg, url, line, col){
   var CONFIG = {
     N: 11,
     SPAWN_COL: 5,
-    BASE_INTERVAL: 1872,
+    BASE_INTERVAL: 936,          // было 1872 → в 2 раза быстрее
     SPEED_FACTOR: 1.1,
     MAX_SPEED_LEVEL: 20,
     MIN_WORD_LEN: 3,
     SCORE_MULT: 10,
     MAX_LEVEL: 30,
-    LEVEL_STEP: 10000,           // было 3000 → теперь победа = 290 000
+    LEVEL_STEP: 10000,
     LEVELUP_PAUSE_MS: 3500,
 
-    /* Комбо: 1 + 0.3 * (N-1), максимум ×3.
-       1 → 1.0
-       2 → 1.3
-       3 → 1.6
-       4 → 1.9
-       5 → 2.2
-       6 → 2.5
-       7 → 2.8
-       8+ → 3.0 */
     COMBO_STEP: 0.3,
     COMBO_MAX:  3.0,
+
+    /* Сложные буквы:
+       COMPLEX_MIN_FRAC — доля на ур. 1 (минимум)
+       COMPLEX_MAX_FRAC — доля на ур. 30 (= MAX_LEVEL)
+       Внутри сложных: SIGNS_FRACTION от общего числа сложных — на знаки. */
+    COMPLEX_MIN_FRAC: 0.01,     // 1% на ур. 1
+    COMPLEX_MAX_FRAC: 0.10,     // 10% на ур. 30 (как раньше)
+    SIGNS_FRACTION:   0.05,     // 5% от сложных — знаки, 95% — непопулярные
 
     DIR_GROUPS: [
       { max: 8,     dirs: ['right','left','up','down'] },
@@ -56,6 +56,8 @@ window.onerror = function(msg, url, line, col){
       'Тритон','Церера','Веста','Паллада','Юнона','Гигея','Эрида','Макемаке','Хаумеа','Селена'
     ],
 
+    /* Базовые веса — задают СООТНОШЕНИЕ между буквами внутри каждой группы.
+       Абсолютные значения пересчитываются на каждом уровне. */
     LETTER_WEIGHTS: {
       'а':1100,'е':800,'о':800,'и':700,'н':600,'т':500,
       'у':375,'я':375,'б':375,'в':375,'г':375,'д':375,
@@ -65,8 +67,10 @@ window.onerror = function(msg, url, line, col){
       'ь':45,'ъ':5
     },
 
-    UNPOPULAR: ['ы','э','ю','з','й','ф','х','ц','ч','ш','щ'],
-    SIGNS:     ['ь','ъ'],
+    SIMPLE_LETTERS: ['а','е','о','и','н','т','у','я','б','в','г','д','к','л','м','п','р','с'],
+    UNPOPULAR:      ['ы','э','ю','з','й','ф','х','ц','ч','ш','щ'],
+    SIGNS:          ['ь','ъ'],
+
     BONUS_UNPOPULAR: 5,
     BONUS_SIGN:      10,
 
@@ -121,17 +125,82 @@ window.onerror = function(msg, url, line, col){
     trie.insert(DICT_RAW[di].toUpperCase());
   }
 
-  var ALL_LETTERS = Object.keys(CONFIG.LETTER_WEIGHTS);
+  /* ---------- Веса букв по уровням ----------
+     На каждом уровне пересчитываем абсолютные веса так,
+     чтобы доля сложных букв плавно росла от COMPLEX_MIN_FRAC до COMPLEX_MAX_FRAC. */
   var VOWELS_SET = { 'а':1,'е':1,'и':1,'о':1,'у':1,'ы':1,'э':1,'ю':1,'я':1 };
-  var VOWEL_LIST = [], CONSONANT_LIST = [];
-  for (var li=0; li<ALL_LETTERS.length; li++){
-    if (VOWELS_SET[ALL_LETTERS[li]]) VOWEL_LIST.push(ALL_LETTERS[li]);
-    else CONSONANT_LIST.push(ALL_LETTERS[li]);
-  }
-  var VOWEL_TOTAL = 0, CONSONANT_TOTAL = 0;
-  for (var vi=0; vi<VOWEL_LIST.length; vi++)     VOWEL_TOTAL     += CONFIG.LETTER_WEIGHTS[VOWEL_LIST[vi]];
-  for (var ci=0; ci<CONSONANT_LIST.length; ci++) CONSONANT_TOTAL += CONFIG.LETTER_WEIGHTS[CONSONANT_LIST[ci]];
+  var LEVEL_WEIGHTS = [];
 
+  function computeLevelWeights(level){
+    var maxLv = CONFIG.MAX_LEVEL;
+    var t = maxLv > 1 ? (Math.min(Math.max(level,1), maxLv) - 1) / (maxLv - 1) : 0;
+    var complexFrac = CONFIG.COMPLEX_MIN_FRAC + t * (CONFIG.COMPLEX_MAX_FRAC - CONFIG.COMPLEX_MIN_FRAC);
+    var simpleFrac  = 1 - complexFrac;
+    var signFrac    = complexFrac * CONFIG.SIGNS_FRACTION;
+    var unpopFrac   = complexFrac * (1 - CONFIG.SIGNS_FRACTION);
+
+    var weights = {};
+
+    // Простые буквы
+    var simpleTotal = 0;
+    for (var i=0;i<CONFIG.SIMPLE_LETTERS.length;i++){
+      simpleTotal += CONFIG.LETTER_WEIGHTS[CONFIG.SIMPLE_LETTERS[i]];
+    }
+    var simpleScale = simpleTotal > 0 ? (simpleFrac * 10000) / simpleTotal : 0;
+    for (var i=0;i<CONFIG.SIMPLE_LETTERS.length;i++){
+      var ch = CONFIG.SIMPLE_LETTERS[i];
+      weights[ch] = CONFIG.LETTER_WEIGHTS[ch] * simpleScale;
+    }
+
+    // Непопулярные
+    var unpopTotal = 0;
+    for (var i=0;i<CONFIG.UNPOPULAR.length;i++){
+      unpopTotal += CONFIG.LETTER_WEIGHTS[CONFIG.UNPOPULAR[i]];
+    }
+    var unpopScale = unpopTotal > 0 ? (unpopFrac * 10000) / unpopTotal : 0;
+    for (var i=0;i<CONFIG.UNPOPULAR.length;i++){
+      var ch = CONFIG.UNPOPULAR[i];
+      weights[ch] = CONFIG.LETTER_WEIGHTS[ch] * unpopScale;
+    }
+
+    // Знаки
+    var signTotal = 0;
+    for (var i=0;i<CONFIG.SIGNS.length;i++){
+      signTotal += CONFIG.LETTER_WEIGHTS[CONFIG.SIGNS[i]];
+    }
+    var signScale = signTotal > 0 ? (signFrac * 10000) / signTotal : 0;
+    for (var i=0;i<CONFIG.SIGNS.length;i++){
+      var ch = CONFIG.SIGNS[i];
+      weights[ch] = CONFIG.LETTER_WEIGHTS[ch] * signScale;
+    }
+
+    // Разбиваем на гласные/согласные для чередования
+    var vowelList = [], consonantList = [];
+    var vowelTotal = 0, consonantTotal = 0;
+    for (var ch in weights){
+      if (VOWELS_SET[ch]){ vowelList.push(ch); vowelTotal += weights[ch]; }
+      else { consonantList.push(ch); consonantTotal += weights[ch]; }
+    }
+
+    return {
+      weights: weights,
+      vowelList: vowelList,
+      consonantList: consonantList,
+      vowelTotal: vowelTotal,
+      consonantTotal: consonantTotal
+    };
+  }
+
+  for (var lv0 = 1; lv0 <= CONFIG.MAX_LEVEL; lv0++){
+    LEVEL_WEIGHTS[lv0] = computeLevelWeights(lv0);
+  }
+  function getLevelWeights(level){
+    if (!level || level < 1) level = 1;
+    if (level > CONFIG.MAX_LEVEL) level = CONFIG.MAX_LEVEL;
+    return LEVEL_WEIGHTS[level];
+  }
+
+  /* ---------- Генератор букв ---------- */
   var typeHistory = [];
   function pickType(){
     var n = typeHistory.length;
@@ -146,13 +215,15 @@ window.onerror = function(msg, url, line, col){
   }
 
   function randomLetter(){
+    var lw = getLevelWeights(G.level || 1);
     var type = pickType();
-    var list  = type === 'c' ? CONSONANT_LIST : VOWEL_LIST;
-    var total = type === 'c' ? CONSONANT_TOTAL : VOWEL_TOTAL;
+    var list, total;
+    if (type === 'c'){ list = lw.consonantList; total = lw.consonantTotal; }
+    else { list = lw.vowelList; total = lw.vowelTotal; }
     var r = Math.random() * total;
     var chosen = list[0];
     for (var i=0;i<list.length;i++){
-      r -= CONFIG.LETTER_WEIGHTS[list[i]];
+      r -= lw.weights[list[i]];
       if (r <= 0){ chosen = list[i]; break; }
     }
     recordType(type);
@@ -260,9 +331,6 @@ window.onerror = function(msg, url, line, col){
     return true;
   }
 
-  /* ---------- Очки ----------
-     Базово: Σ(длина² × 10 × бонус_буквы)
-     Комбо: ×min(3, 1 + 0.3 × (N - 1)) */
   function comboMultiplier(n){
     if (n <= 1) return 1;
     var m = 1 + CONFIG.COMBO_STEP * (n - 1);
