@@ -1,8 +1,9 @@
 /* =====================================================================
-   ЛОНИКА — движок v16 (финальный на сегодня)
-   + BASE_INTERVAL: 1872 (скорость падения — как было, НЕ тронуто)
-   + LOCK_DELAY_MS: 1000 (окно фиксации 1 сек)
-   + сложные буквы растут с уровня: 1% на ур.1 → 10% на ур.30
+   ЛОНИКА — движок v17 (оптимизированный)
+   + убраны canvas-градиенты (было 121 объект на кадр)
+   + убран shadowBlur (самая дорогая операция canvas)
+   + ограничение FPS = 40
+   + LOCK_DELAY_MS = 1000, сложные буквы по уровням — без изменений
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -23,8 +24,8 @@ window.onerror = function(msg, url, line, col){
   var CONFIG = {
     N: 11,
     SPAWN_COL: 5,
-    BASE_INTERVAL: 1872,         // скорость падения — как было, НЕ тронуто
-    LOCK_DELAY_MS: 1000,         // окно фиксации: 1 секунда
+    BASE_INTERVAL: 1872,
+    LOCK_DELAY_MS: 1000,
     SPEED_FACTOR: 1.1,
     MAX_SPEED_LEVEL: 20,
     MIN_WORD_LEN: 3,
@@ -36,9 +37,9 @@ window.onerror = function(msg, url, line, col){
     COMBO_STEP: 0.3,
     COMBO_MAX:  3.0,
 
-    COMPLEX_MIN_FRAC: 0.01,      // сложных букв на ур. 1  = 1%
-    COMPLEX_MAX_FRAC: 0.10,      // сложных букв на ур. 30 = 10%
-    SIGNS_FRACTION:   0.05,      // из них знаки = 5% (ь, ъ)
+    COMPLEX_MIN_FRAC: 0.01,
+    COMPLEX_MAX_FRAC: 0.10,
+    SIGNS_FRACTION:   0.05,
 
     DIR_GROUPS: [
       { max: 8,     dirs: ['right','left','up','down'] },
@@ -71,7 +72,8 @@ window.onerror = function(msg, url, line, col){
     BONUS_SIGN:      10,
 
     SOFT_DROP: 0.06,
-    HIGHLIGHT_REFRESH_MS: 140
+    HIGHLIGHT_REFRESH_MS: 140,
+    RENDER_FPS: 40
   };
 
   var LETTER_BONUS = Object.create(null);
@@ -420,7 +422,7 @@ window.onerror = function(msg, url, line, col){
   };
 
   var canvas = document.getElementById('board');
-  var ctx = canvas.getContext('2d');
+  var ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
   var cellSize = 32, boardPx = 416;
   var lastFrameTs = performance.now();
 
@@ -434,7 +436,7 @@ window.onerror = function(msg, url, line, col){
     var availW = Math.min(window.innerWidth - 24, 480);
     var availH = window.innerHeight - headerH - previewsH - controlsH - 60;
     boardPx = Math.max(220, Math.min(availW, availH));
-    var dpr = window.devicePixelRatio || 1;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.style.width = boardPx + 'px';
     canvas.style.height = boardPx + 'px';
     canvas.width  = Math.round(boardPx * dpr);
@@ -454,28 +456,19 @@ window.onerror = function(msg, url, line, col){
     ctx.closePath();
   }
 
+  /* Сплошные цвета вместо градиентов. Палитра на каждый случай. */
   function tilePalette(tier, mode){
     if (mode === 'highlight'){
-      return { top:'#FFE28A', bottom:'#F0A83A', edge:'#C67D18', shadow:'#8F5608', letter:'#3A2400' };
+      return { fill:'#F5B93C', shadow:'#8F5608', edge:'#C67D18', letter:'#3A2400' };
     }
     if (mode === 'falling'){
-      if (tier >= 10) return { top:'#FF7BA8', bottom:'#D02050', edge:'#A01030', shadow:'#7A0828', letter:'#FFFFFF' };
-      if (tier >= 5)  return { top:'#C471FF', bottom:'#8A2EE6', edge:'#5A1A9A', shadow:'#3A0E6A', letter:'#FFFFFF' };
-      return               { top:'#5DA8FF', bottom:'#2E6FE6', edge:'#1D4AB8', shadow:'#0E2A8A', letter:'#FFFFFF' };
+      if (tier >= 10) return { fill:'#E82A5C', shadow:'#7A0828', edge:'#A01030', letter:'#FFFFFF' };
+      if (tier >= 5)  return { fill:'#9C40F0', shadow:'#3A0E6A', edge:'#5A1A9A', letter:'#FFFFFF' };
+      return               { fill:'#4A8AE8', shadow:'#0E2A8A', edge:'#1D4AB8', letter:'#FFFFFF' };
     }
-    if (tier >= 10) return { top:'#FFD5E0', bottom:'#E8B0C0', edge:'#C890A0', shadow:'#A07080', letter:'#5A0A28' };
-    if (tier >= 5)  return { top:'#E8D5FF', bottom:'#C8AAE8', edge:'#A88AD0', shadow:'#8870B0', letter:'#3A1560' };
-    return               { top:'#FFFFFF', bottom:'#DCE4F0', edge:'#C8D0E0', shadow:'#9AA5BF', letter:'#1E2A4A' };
-  }
-  function glowColorFor(tier){
-    if (tier >= 10) return '#FF3E7F';
-    if (tier >= 5)  return '#B44CFF';
-    return '#FFD66B';
-  }
-  function fallingGlowFor(tier){
-    if (tier >= 10) return '#FF3E7F';
-    if (tier >= 5)  return '#B44CFF';
-    return '#4A90FF';
+    if (tier >= 10) return { fill:'#F0C4CE', shadow:'#A07080', edge:'#C890A0', letter:'#5A0A28' };
+    if (tier >= 5)  return { fill:'#D8C0EE', shadow:'#8870B0', edge:'#A88AD0', letter:'#3A1560' };
+    return               { fill:'#EDF1F8', shadow:'#9AA5BF', edge:'#C8D0E0', letter:'#1E2A4A' };
   }
 
   function drawCell(x, y, letter, opts){
@@ -494,76 +487,54 @@ window.onerror = function(msg, url, line, col){
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.translate(ox, oy);
-    ctx.scale(scale, scale);
-    ctx.translate(-cellSize/2, -cellSize/2);
-
-    if (mode === 'falling'){
-      var glowCol = fallingGlowFor(tier);
-      ctx.shadowColor = glowCol;
-      ctx.shadowBlur = tier >= 5 ? 22 : 18;
+    if (scale !== 1){
+      ctx.translate(ox, oy);
+      ctx.scale(scale, scale);
+      ctx.translate(-ox, -oy);
     }
 
+    // тень-основание
     ctx.fillStyle = pal.shadow;
-    roundRect(pad, pad + shadowH, s, s, r);
+    roundRect(x + pad, y + pad + shadowH, s, s, r);
     ctx.fill();
 
-    ctx.shadowBlur = 0;
-    var g = ctx.createLinearGradient(0, pad, 0, pad + s);
-    g.addColorStop(0, pal.top);
-    g.addColorStop(1, pal.bottom);
-    ctx.fillStyle = g;
-    roundRect(pad, pad, s, s, r);
+    // плитка
+    ctx.fillStyle = pal.fill;
+    roundRect(x + pad, y + pad, s, s, r);
     ctx.fill();
 
+    // обводка
     ctx.strokeStyle = pal.edge;
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    if (mode === 'highlight'){
-      var pulse = 0.5 + 0.5 * Math.sin(G.pulseT / 220);
-      var glow = glowColorFor(tier);
-      ctx.shadowColor = glow;
-      ctx.shadowBlur = 18 + pulse * 14;
-      ctx.strokeStyle = 'rgba(255,255,255,' + (0.7 + pulse * 0.3) + ')';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-
+    // буква
     ctx.fillStyle = pal.letter;
     ctx.font = '800 ' + (cellSize * 0.54) + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(letter, cellSize/2, cellSize/2 + 1);
+    ctx.fillText(letter, x + cellSize/2, y + cellSize/2 + 1);
     ctx.restore();
   }
 
   function render(){
-    ctx.fillStyle = 'rgba(10, 14, 30, 0.9)';
+    // фон поля
+    ctx.fillStyle = '#0e1428';
     ctx.fillRect(0, 0, boardPx, boardPx);
 
+    // пустые клетки
     var pad = cellSize * 0.07;
     var s = cellSize - pad * 2;
     var r = s * 0.22;
+    ctx.fillStyle = '#151a30';
     for (var rr0=0; rr0<N; rr0++){
       for (var cc0=0; cc0<N; cc0++){
         if (board[rr0][cc0]) continue;
-        ctx.fillStyle = '#151a30';
         roundRect(cc0*cellSize + pad, rr0*cellSize + pad, s, s, r);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(120,150,220,0.06)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
       }
     }
 
-    ctx.strokeStyle = 'rgba(100,130,200,0.04)';
-    ctx.lineWidth = 1;
-    for (var i=1; i<N; i++){
-      ctx.beginPath(); ctx.moveTo(i*cellSize, 0); ctx.lineTo(i*cellSize, boardPx); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, i*cellSize); ctx.lineTo(boardPx, i*cellSize); ctx.stroke();
-    }
-
+    // карта подсветки
     var hl = Object.create(null);
     for (var hi=0; hi<G.highlight.length; hi++){
       var hw = G.highlight[hi];
@@ -575,16 +546,21 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    var delSet = Object.create(null);
     var now = performance.now();
+
+    // удаление
+    var delSet = null;
     if (G.phase && G.phase.type === 'delete'){
+      delSet = Object.create(null);
       var dt1 = Math.min(1, (now - G.phase.start) / G.phase.dur);
       for (var dI=0; dI<G.deleting.length; dI++){
         delSet[G.deleting[dI].r*N + G.deleting[dI].c] = dt1;
       }
     }
-    var fallMap = Object.create(null);
+    // падение
+    var fallMap = null;
     if (G.phase && G.phase.type === 'fall'){
+      fallMap = Object.create(null);
       var dt2 = Math.min(1, (now - G.phase.start) / G.phase.dur);
       var ease = 1 - Math.pow(1 - dt2, 3);
       for (var fI=0; fI<G.fallMoves.length; fI++){
@@ -593,17 +569,18 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
+    // зафиксированные буквы
     for (var r=0;r<N;r++){
       for (var c=0;c<N;c++){
         var cell = board[r][c];
         if (!cell) continue;
         var y = r * cellSize;
         var x = c * cellSize;
-        if (fallMap[cell.id]){
+        if (fallMap && fallMap[cell.id]){
           var fm = fallMap[cell.id];
           y = (fm.fromR + (fm.toR - fm.fromR) * fm.t) * cellSize;
         }
-        var delT = delSet[r*N + c];
+        var delT = delSet ? delSet[r*N + c] : null;
         var mark = hl[r*N + c];
         var opts = {
           highlight: !!mark,
@@ -617,6 +594,7 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
+    // падающая буква
     if (G.piece && (G.state === 'PLAYING') && !G.busy){
       var p = G.piece;
       var spawnT = 1;
@@ -630,8 +608,7 @@ window.onerror = function(msg, url, line, col){
       if (p.lockStart){
         var lt = (now - p.lockStart) / CONFIG.LOCK_DELAY_MS;
         if (lt < 1){
-          var blink = 0.85 + 0.15 * Math.sin(lt * Math.PI * 6);
-          alpha = easeSpawn * blink;
+          alpha = easeSpawn * (0.9 + 0.1 * Math.sin(lt * Math.PI * 8));
         }
       }
 
@@ -643,27 +620,29 @@ window.onerror = function(msg, url, line, col){
       });
     }
 
+    // вспышка при фиксации — тонкая рамка вместо радиального градиента
     if (G.lockFx){
       var ltf = (now - G.lockFx.start) / 350;
-      if (ltf >= 1){ G.lockFx = null; }
-      else {
-        var lx = G.lockFx.c * cellSize + cellSize / 2;
-        var ly = G.lockFx.r * cellSize + cellSize / 2;
-        var radius = cellSize * (0.6 + ltf * 0.9);
-        var alphaL = (1 - ltf) * 0.7;
-        var grad = ctx.createRadialGradient(lx, ly, 0, lx, ly, radius);
-        grad.addColorStop(0, 'rgba(255,255,255,' + alphaL + ')');
-        grad.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(lx - radius, ly - radius, radius * 2, radius * 2);
+      if (ltf >= 1){
+        G.lockFx = null;
+      } else {
+        var a = 1 - ltf;
+        ctx.strokeStyle = 'rgba(255,255,255,' + (a * 0.8) + ')';
+        ctx.lineWidth = 2;
+        var lx = G.lockFx.c * cellSize;
+        var ly = G.lockFx.r * cellSize;
+        roundRect(lx + 2, ly + 2, cellSize - 4, cellSize - 4, 8);
+        ctx.stroke();
       }
     }
 
+    // вспышка при GO
     if (G.goFx){
       var gt = (now - G.goFx) / 400;
-      if (gt >= 1){ G.goFx = null; }
-      else {
-        ctx.fillStyle = 'rgba(255,240,180,' + ((1 - gt) * 0.25) + ')';
+      if (gt >= 1){
+        G.goFx = null;
+      } else {
+        ctx.fillStyle = 'rgba(255,240,180,' + ((1 - gt) * 0.2) + ')';
         ctx.fillRect(0, 0, boardPx, boardPx);
       }
     }
@@ -755,10 +734,10 @@ window.onerror = function(msg, url, line, col){
     levelupEl.style.cssText =
       'position:fixed;left:50%;top:45%;transform:translate(-50%,-50%) scale(0.4);' +
       'padding:34px 46px 28px;border-radius:32px;' +
-      'background:radial-gradient(circle at 50% 30%, rgba(60,40,110,.98), rgba(20,12,45,.98));' +
+      'background:radial-gradient(circle at 50% 30%, #3c286e, #14082d);' +
       'color:#fff;font-weight:900;text-align:center;z-index:9998;' +
       'border:2px solid rgba(255,210,120,.7);' +
-      'box-shadow:0 30px 120px rgba(160,120,255,.7),0 0 0 6px rgba(255,200,80,.25),0 0 100px rgba(255,180,80,.5);' +
+      'box-shadow:0 30px 120px rgba(160,120,255,.5);' +
       'opacity:0;transition:opacity .5s ease, transform .55s cubic-bezier(.34,1.56,.64,1);' +
       'pointer-events:none;font-family:-apple-system,"Segoe UI",Roboto,sans-serif;min-width:280px';
     document.body.appendChild(levelupEl);
@@ -774,14 +753,13 @@ window.onerror = function(msg, url, line, col){
       '<div style="font-size:11px;letter-spacing:6px;color:#b8c2dc;opacity:.7">НОВАЯ ПЛАНЕТА</div>' +
       '<div style="margin:14px auto 0;width:110px;height:110px;border-radius:50%;' +
         'background:radial-gradient(circle at 35% 30%, #ffd66b 0%, #f0a83a 40%, #8a4a20 100%);' +
-        'box-shadow:0 0 60px rgba(255,180,80,.9),inset -10px -10px 30px rgba(80,40,0,.6),inset 8px 8px 20px rgba(255,240,200,.6);' +
         'position:relative">' +
         '<div style="position:absolute;inset:-18px;border:1.5px solid rgba(180,140,255,.4);border-radius:50%;' +
           'border-top-color:rgba(255,214,107,.9);transform:rotate(25deg)"></div>' +
       '</div>' +
       '<div style="margin-top:16px;font-size:34px;letter-spacing:3px;font-weight:900;' +
-        'background:linear-gradient(90deg,#ffd66b,#ff9ec0);-webkit-background-clip:text;background-clip:text;color:transparent;' +
-        'filter:drop-shadow(0 0 20px rgba(255,180,80,.6))">' + planetName.toUpperCase() + '</div>' +
+        'background:linear-gradient(90deg,#ffd66b,#ff9ec0);-webkit-background-clip:text;background-clip:text;color:transparent">' +
+        planetName.toUpperCase() + '</div>' +
       '<div style="margin-top:14px;font-size:16px;letter-spacing:4px;color:#fff;font-weight:900">НОВЫЙ УРОВЕНЬ ' + newLevel + '</div>' +
       speedText;
     el2.innerHTML = body;
@@ -960,14 +938,12 @@ window.onerror = function(msg, url, line, col){
     var recordBadge = isRecord
       ? '<div style="display:inline-block;padding:6px 16px;border-radius:999px;' +
         'background:linear-gradient(to bottom,#ffd66b,#f0a83a);color:#3a2400;' +
-        'font-weight:900;font-size:12px;letter-spacing:2px;margin-top:8px;' +
-        'box-shadow:0 3px 0 #a06f18,0 0 24px rgba(255,200,80,.6)">НОВЫЙ РЕКОРД!</div>'
+        'font-weight:900;font-size:12px;letter-spacing:2px;margin-top:8px">НОВЫЙ РЕКОРД!</div>'
       : '<div style="margin-top:8px;font-size:12px;color:#7a86a8;letter-spacing:1px">лучший: ' + best.toLocaleString('ru-RU') + '</div>';
     showOverlay(
       '<h1 style="font-size:32px;letter-spacing:6px">ИГРА ОКОНЧЕНА</h1>' +
       '<div style="margin-top:12px;padding:18px 32px;border-radius:20px;' +
-        'background:rgba(20,16,50,.85);border:1px solid rgba(120,140,220,.25);' +
-        'box-shadow:0 12px 40px rgba(0,0,0,.5)">' +
+        'background:rgba(20,16,50,.85);border:1px solid rgba(120,140,220,.25)">' +
         '<div style="font-size:11px;letter-spacing:4px;color:#7a86a8">СЧЁТ</div>' +
         '<div style="font-size:38px;font-weight:900;color:#fff;margin-top:4px;font-variant-numeric:tabular-nums">' + G.score.toLocaleString('ru-RU') + '</div>' +
         '<div style="font-size:12px;color:#b8c2dc;margin-top:8px">Планета: <b>' + planetForLevel(G.level) + '</b></div>' +
@@ -984,8 +960,7 @@ window.onerror = function(msg, url, line, col){
       '<h1>ПОБЕДА!</h1>' +
       '<p style="margin-top:8px">Ты прошёл все 30 планет — от Меркурия до Селены!</p>' +
       '<div style="margin-top:12px;padding:18px 32px;border-radius:20px;' +
-        'background:rgba(20,16,50,.85);border:1px solid rgba(255,200,80,.35);' +
-        'box-shadow:0 12px 40px rgba(0,0,0,.5),0 0 60px rgba(255,200,80,.3)">' +
+        'background:rgba(20,16,50,.85);border:1px solid rgba(255,200,80,.35)">' +
         '<div style="font-size:11px;letter-spacing:4px;color:#7a86a8">ФИНАЛЬНЫЙ СЧЁТ</div>' +
         '<div style="font-size:38px;font-weight:900;color:#ffd66b;margin-top:4px;font-variant-numeric:tabular-nums">' + G.score.toLocaleString('ru-RU') + '</div>' +
       '</div>' +
@@ -1099,11 +1074,20 @@ window.onerror = function(msg, url, line, col){
       G.piece.visualRow = G.piece.row + Math.min(1, Math.max(0, frac));
     }
   }
+
+  /* Ограничение FPS: физика и логика считаются на каждом кадре,
+     а canvas перерисовывается не чаще 40 раз в секунду. */
+  var lastRenderTs = 0;
+  var renderInterval = 1000 / CONFIG.RENDER_FPS;
+
   function loop(ts){
     var dt = Math.min(60, ts - lastFrameTs);
     lastFrameTs = ts;
     update(dt);
-    render();
+    if (ts - lastRenderTs >= renderInterval){
+      lastRenderTs = ts;
+      render();
+    }
     requestAnimationFrame(loop);
   }
 
