@@ -1,7 +1,6 @@
 /* =====================================================================
-   ЛОНИКА — движок v13
-   + фиксация буквы ускорена в 2 раза (BASE_INTERVAL: 936)
-   + сложные буквы растут с уровнем: 1% на ур.1 → 10% на ур.30
+   ЛОНИКА — движок v15
+   + LOCK_DELAY_MS: 1000 (окно фиксации 1 сек)
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -22,7 +21,8 @@ window.onerror = function(msg, url, line, col){
   var CONFIG = {
     N: 11,
     SPAWN_COL: 5,
-    BASE_INTERVAL: 936,          // было 1872 → в 2 раза быстрее
+    BASE_INTERVAL: 1872,
+    LOCK_DELAY_MS: 1000,
     SPEED_FACTOR: 1.1,
     MAX_SPEED_LEVEL: 20,
     MIN_WORD_LEN: 3,
@@ -34,13 +34,9 @@ window.onerror = function(msg, url, line, col){
     COMBO_STEP: 0.3,
     COMBO_MAX:  3.0,
 
-    /* Сложные буквы:
-       COMPLEX_MIN_FRAC — доля на ур. 1 (минимум)
-       COMPLEX_MAX_FRAC — доля на ур. 30 (= MAX_LEVEL)
-       Внутри сложных: SIGNS_FRACTION от общего числа сложных — на знаки. */
-    COMPLEX_MIN_FRAC: 0.01,     // 1% на ур. 1
-    COMPLEX_MAX_FRAC: 0.10,     // 10% на ур. 30 (как раньше)
-    SIGNS_FRACTION:   0.05,     // 5% от сложных — знаки, 95% — непопулярные
+    COMPLEX_MIN_FRAC: 0.01,
+    COMPLEX_MAX_FRAC: 0.10,
+    SIGNS_FRACTION:   0.05,
 
     DIR_GROUPS: [
       { max: 8,     dirs: ['right','left','up','down'] },
@@ -56,8 +52,6 @@ window.onerror = function(msg, url, line, col){
       'Тритон','Церера','Веста','Паллада','Юнона','Гигея','Эрида','Макемаке','Хаумеа','Селена'
     ],
 
-    /* Базовые веса — задают СООТНОШЕНИЕ между буквами внутри каждой группы.
-       Абсолютные значения пересчитываются на каждом уровне. */
     LETTER_WEIGHTS: {
       'а':1100,'е':800,'о':800,'и':700,'н':600,'т':500,
       'у':375,'я':375,'б':375,'в':375,'г':375,'д':375,
@@ -125,9 +119,6 @@ window.onerror = function(msg, url, line, col){
     trie.insert(DICT_RAW[di].toUpperCase());
   }
 
-  /* ---------- Веса букв по уровням ----------
-     На каждом уровне пересчитываем абсолютные веса так,
-     чтобы доля сложных букв плавно росла от COMPLEX_MIN_FRAC до COMPLEX_MAX_FRAC. */
   var VOWELS_SET = { 'а':1,'е':1,'и':1,'о':1,'у':1,'ы':1,'э':1,'ю':1,'я':1 };
   var LEVEL_WEIGHTS = [];
 
@@ -141,40 +132,30 @@ window.onerror = function(msg, url, line, col){
 
     var weights = {};
 
-    // Простые буквы
     var simpleTotal = 0;
-    for (var i=0;i<CONFIG.SIMPLE_LETTERS.length;i++){
-      simpleTotal += CONFIG.LETTER_WEIGHTS[CONFIG.SIMPLE_LETTERS[i]];
-    }
+    for (var i=0;i<CONFIG.SIMPLE_LETTERS.length;i++) simpleTotal += CONFIG.LETTER_WEIGHTS[CONFIG.SIMPLE_LETTERS[i]];
     var simpleScale = simpleTotal > 0 ? (simpleFrac * 10000) / simpleTotal : 0;
     for (var i=0;i<CONFIG.SIMPLE_LETTERS.length;i++){
       var ch = CONFIG.SIMPLE_LETTERS[i];
       weights[ch] = CONFIG.LETTER_WEIGHTS[ch] * simpleScale;
     }
 
-    // Непопулярные
     var unpopTotal = 0;
-    for (var i=0;i<CONFIG.UNPOPULAR.length;i++){
-      unpopTotal += CONFIG.LETTER_WEIGHTS[CONFIG.UNPOPULAR[i]];
-    }
+    for (var i=0;i<CONFIG.UNPOPULAR.length;i++) unpopTotal += CONFIG.LETTER_WEIGHTS[CONFIG.UNPOPULAR[i]];
     var unpopScale = unpopTotal > 0 ? (unpopFrac * 10000) / unpopTotal : 0;
     for (var i=0;i<CONFIG.UNPOPULAR.length;i++){
       var ch = CONFIG.UNPOPULAR[i];
       weights[ch] = CONFIG.LETTER_WEIGHTS[ch] * unpopScale;
     }
 
-    // Знаки
     var signTotal = 0;
-    for (var i=0;i<CONFIG.SIGNS.length;i++){
-      signTotal += CONFIG.LETTER_WEIGHTS[CONFIG.SIGNS[i]];
-    }
+    for (var i=0;i<CONFIG.SIGNS.length;i++) signTotal += CONFIG.LETTER_WEIGHTS[CONFIG.SIGNS[i]];
     var signScale = signTotal > 0 ? (signFrac * 10000) / signTotal : 0;
     for (var i=0;i<CONFIG.SIGNS.length;i++){
       var ch = CONFIG.SIGNS[i];
       weights[ch] = CONFIG.LETTER_WEIGHTS[ch] * signScale;
     }
 
-    // Разбиваем на гласные/согласные для чередования
     var vowelList = [], consonantList = [];
     var vowelTotal = 0, consonantTotal = 0;
     for (var ch in weights){
@@ -182,13 +163,8 @@ window.onerror = function(msg, url, line, col){
       else { consonantList.push(ch); consonantTotal += weights[ch]; }
     }
 
-    return {
-      weights: weights,
-      vowelList: vowelList,
-      consonantList: consonantList,
-      vowelTotal: vowelTotal,
-      consonantTotal: consonantTotal
-    };
+    return { weights: weights, vowelList: vowelList, consonantList: consonantList,
+             vowelTotal: vowelTotal, consonantTotal: consonantTotal };
   }
 
   for (var lv0 = 1; lv0 <= CONFIG.MAX_LEVEL; lv0++){
@@ -200,7 +176,6 @@ window.onerror = function(msg, url, line, col){
     return LEVEL_WEIGHTS[level];
   }
 
-  /* ---------- Генератор букв ---------- */
   var typeHistory = [];
   function pickType(){
     var n = typeHistory.length;
@@ -415,14 +390,10 @@ window.onerror = function(msg, url, line, col){
       },
       levelup: function(){
         var notes = [523, 659, 784, 1046, 1318, 1568, 2093];
-        notes.forEach(function(f,i){
-          setTimeout(function(){ beep(f, 0.14, 'triangle', 0.10); }, i*110);
-        });
+        notes.forEach(function(f,i){ setTimeout(function(){ beep(f, 0.14, 'triangle', 0.10); }, i*110); });
         setTimeout(function(){
-          beep(523, 0.6, 'sine', 0.09);
-          beep(659, 0.6, 'sine', 0.09);
-          beep(784, 0.6, 'sine', 0.09);
-          beep(1046, 0.6, 'sine', 0.09);
+          beep(523, 0.6, 'sine', 0.09); beep(659, 0.6, 'sine', 0.09);
+          beep(784, 0.6, 'sine', 0.09); beep(1046, 0.6, 'sine', 0.09);
         }, 900);
       },
       gameover: function(){
@@ -432,10 +403,8 @@ window.onerror = function(msg, url, line, col){
         var notes = [523,659,784,1046,1318,1568,2093];
         notes.forEach(function(f,i){ setTimeout(function(){ beep(f,0.16,'sine',0.10); }, i*130); });
         setTimeout(function(){
-          beep(523, 0.8, 'sine', 0.10);
-          beep(659, 0.8, 'sine', 0.10);
-          beep(784, 0.8, 'sine', 0.10);
-          beep(1046, 0.8, 'sine', 0.10);
+          beep(523, 0.8, 'sine', 0.10); beep(659, 0.8, 'sine', 0.10);
+          beep(784, 0.8, 'sine', 0.10); beep(1046, 0.8, 'sine', 0.10);
           beep(1318, 0.8, 'sine', 0.10);
         }, 1100);
       }
@@ -654,22 +623,32 @@ window.onerror = function(msg, url, line, col){
       }
       var easeSpawn = 1 - Math.pow(1 - spawnT, 3);
       var scale = 0.5 + 0.5 * easeSpawn;
+
+      var alpha = easeSpawn;
+      if (p.lockStart){
+        var lt = (now - p.lockStart) / CONFIG.LOCK_DELAY_MS;
+        if (lt < 1){
+          var blink = 0.85 + 0.15 * Math.sin(lt * Math.PI * 6);
+          alpha = easeSpawn * blink;
+        }
+      }
+
       drawCell(p.col * cellSize, p.visualRow * cellSize, p.letter, {
         falling: true,
         tier: letterBonus(p.letter),
         scale: scale,
-        alpha: easeSpawn
+        alpha: alpha
       });
     }
 
     if (G.lockFx){
-      var lt = (now - G.lockFx.start) / 350;
-      if (lt >= 1){ G.lockFx = null; }
+      var ltf = (now - G.lockFx.start) / 350;
+      if (ltf >= 1){ G.lockFx = null; }
       else {
         var lx = G.lockFx.c * cellSize + cellSize / 2;
         var ly = G.lockFx.r * cellSize + cellSize / 2;
-        var radius = cellSize * (0.6 + lt * 0.9);
-        var alphaL = (1 - lt) * 0.7;
+        var radius = cellSize * (0.6 + ltf * 0.9);
+        var alphaL = (1 - ltf) * 0.7;
         var grad = ctx.createRadialGradient(lx, ly, 0, lx, ly, radius);
         grad.addColorStop(0, 'rgba(255,255,255,' + alphaL + ')');
         grad.addColorStop(1, 'rgba(255,255,255,0)');
@@ -842,8 +821,8 @@ window.onerror = function(msg, url, line, col){
     G.queue.push(randomLetter());
     updatePreviews();
     G.piece = {
-      col: CONFIG.SPAWN_COL, row: 0, visualRow: 0, letter: letter, timer: 0,
-      spawnStart: performance.now()
+      col: CONFIG.SPAWN_COL, row: 0, visualRow: 0, letter: letter,
+      timer: 0, spawnStart: performance.now(), lockStart: null
     };
   }
   function lockPiece(){
@@ -862,12 +841,15 @@ window.onerror = function(msg, url, line, col){
     if (nc < 0 || nc >= N) return;
     if (!canPlace(G.piece.row, nc)) return;
     G.piece.col = nc;
+    G.piece.lockStart = null;   // сдвиг сбрасывает окно фиксации
     Audio8.move();
   }
   function softDropStep(){
     if (G.state !== 'PLAYING' || !G.piece || G.busy) return;
     if (canMoveTo(G.piece.col, G.piece.row + 1)){
-      G.piece.row++; G.piece.timer = 0; Audio8.move();
+      G.piece.row++; G.piece.timer = 0;
+      G.piece.lockStart = null;
+      Audio8.move();
     } else {
       lockPiece();
     }
@@ -1085,22 +1067,38 @@ window.onerror = function(msg, url, line, col){
     if (G.state !== 'PLAYING') return;
     if (G.busy) return;
     if (!G.piece) return;
+
     var base = fallInterval(G.level);
     var eff = keys.down ? base * CONFIG.SOFT_DROP : base;
     G.piece.timer += dt;
+
+    // Падение по таймеру (пока есть куда падать)
     var safety = 8;
     while (G.piece.timer >= eff && safety-- > 0){
-      G.piece.timer -= eff;
       if (canMoveTo(G.piece.col, G.piece.row + 1)){
+        G.piece.timer -= eff;
         G.piece.row++;
+        G.piece.lockStart = null;
       } else {
+        break;
+      }
+    }
+
+    // Окно фиксации: если внизу занято — стартуем таймер
+    if (!canMoveTo(G.piece.col, G.piece.row + 1)){
+      if (!G.piece.lockStart){
+        G.piece.lockStart = performance.now();
+      } else if (performance.now() - G.piece.lockStart >= CONFIG.LOCK_DELAY_MS){
         lockPiece();
         return;
       }
+      // Пока идёт окно фиксации — визуальное положение не меняется
+      G.piece.visualRow = G.piece.row;
+    } else {
+      G.piece.lockStart = null;
+      var frac = G.piece.timer / eff;
+      G.piece.visualRow = G.piece.row + Math.min(1, Math.max(0, frac));
     }
-    var frac = G.piece.timer / eff;
-    if (!canMoveTo(G.piece.col, G.piece.row + 1)) frac = 0;
-    G.piece.visualRow = G.piece.row + Math.min(1, Math.max(0, frac));
   }
   function loop(ts){
     var dt = Math.min(60, ts - lastFrameTs);
