@@ -128,7 +128,6 @@
     .key.go{font-size:18px}
   }
 
-  /* === Скрытие интерфейса на титульном экране и в гайде === */
   body.in-menu header,
   body.in-menu #previews,
   body.in-menu #controls{
@@ -299,7 +298,7 @@
     to  { opacity:1; transform:translateY(0) scale(1); }
   }
 
-  /* ============ ГАЙД ============ */
+  /* ============ ГАЙД — карточки фиксированного размера ============ */
   #tutorial{
     position:fixed;inset:0;z-index:200;display:none;
     align-items:center;justify-content:center;
@@ -308,19 +307,23 @@
   }
   #tutorial.on{display:flex}
   .tut-card{
-    width:100%;max-width:400px;
+    width:100%;
+    max-width:400px;
+    /* ФИКСИРОВАННАЯ ВЫСОТА — одинаковая на всех 4 страницах */
+    height:min(580px, 90vh);
     background:linear-gradient(180deg,#1c1240 0%,#0f0726 100%);
     border:1.5px solid rgba(140,110,220,.4);
     border-radius:24px;
     box-shadow:0 30px 100px rgba(120,60,220,.35);
     padding:20px 20px 18px;
     display:flex;flex-direction:column;
-    min-height:480px;max-height:92vh;
+    overflow:hidden;
   }
   .tut-header{
     display:flex;justify-content:space-between;align-items:center;
     font-size:11px;letter-spacing:3px;text-transform:uppercase;
     color:#7a86a8;font-weight:800;
+    flex:0 0 auto;
   }
   .tut-close{
     background:none;border:0;color:#7a86a8;
@@ -332,14 +335,18 @@
     flex:1 1 auto;
     display:flex;flex-direction:column;align-items:center;justify-content:center;
     text-align:center;padding:16px 4px;gap:14px;
+    min-height:0;
+    overflow-y:auto;
   }
   .tut-icon{
     font-size:64px;line-height:1;
     filter:drop-shadow(0 6px 18px rgba(180,120,255,.55));
+    flex:0 0 auto;
   }
   .tut-title{
     font-size:24px;letter-spacing:2px;font-weight:900;color:#fff;
     margin:0;line-height:1.2;
+    flex:0 0 auto;
   }
   .tut-text{
     font-size:15px;line-height:1.6;color:#b8c2dc;margin:0;
@@ -353,6 +360,7 @@
   .tut-dots{
     display:flex;justify-content:center;gap:8px;
     padding:12px 0 8px;
+    flex:0 0 auto;
   }
   .tut-dot{
     width:8px;height:8px;border-radius:50%;
@@ -362,7 +370,7 @@
   .tut-dot.active{
     background:#c88bff;transform:scale(1.35);
   }
-  .tut-nav{display:flex;gap:10px}
+  .tut-nav{display:flex;gap:10px;flex:0 0 auto}
   .tut-btn{
     flex:1 1 0;
     padding:14px 18px;
