@@ -16,7 +16,6 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     overflow:hidden;background-color:#0a0620;
   }
-  /* Упрощённый фон — без 20 слоёв */
   body::before{
     content:'';position:fixed;inset:0;z-index:-2;
     background:
@@ -157,6 +156,25 @@
     transform:translateY(3px);
     box-shadow:0 2px 0 #a06f18,0 5px 12px rgba(0,0,0,.4);
   }
+  #overlay .link{
+    margin-top:14px;
+    background:none;border:0;
+    color:#7a86a8;font-size:13px;letter-spacing:2px;
+    cursor:pointer;text-decoration:underline;
+    font-family:inherit;padding:6px 10px;
+  }
+  #overlay .link:active{transform:none;box-shadow:none;color:#b8c2dc}
+  /* ТИТУЛЬНЫЙ ЭКРАН */
+  #overlay .title-big{
+    font-size:64px;letter-spacing:14px;font-weight:900;
+    background:linear-gradient(90deg,#7cc0ff 0%,#c88bff 50%,#ff9ec0 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    line-height:1;
+    margin:0;
+  }
+  @media (max-width:400px){
+    #overlay .title-big{font-size:52px;letter-spacing:10px}
+  }
   #toast{
     position:absolute;left:50%;top:14%;transform:translateX(-50%);
     padding:10px 22px;border-radius:999px;
@@ -167,6 +185,99 @@
     opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;
   }
   #toast.on{opacity:1}
+
+  /* ============ ГАЙД (страницы правил) ============ */
+  #tutorial{
+    position:fixed;inset:0;z-index:200;display:none;
+    align-items:center;justify-content:center;
+    padding:16px;
+    background:rgba(6,4,20,.96);
+  }
+  #tutorial.on{display:flex}
+  .tut-card{
+    width:100%;max-width:400px;
+    background:linear-gradient(180deg,#1c1240 0%,#0f0726 100%);
+    border:1.5px solid rgba(140,110,220,.4);
+    border-radius:24px;
+    box-shadow:0 30px 100px rgba(120,60,220,.35);
+    padding:20px 20px 18px;
+    display:flex;flex-direction:column;
+    min-height:480px;max-height:92vh;
+  }
+  .tut-header{
+    display:flex;justify-content:space-between;align-items:center;
+    font-size:11px;letter-spacing:3px;text-transform:uppercase;
+    color:#7a86a8;font-weight:800;
+  }
+  .tut-close{
+    background:none;border:0;color:#7a86a8;
+    font-size:20px;line-height:1;cursor:pointer;
+    padding:4px 8px;font-family:inherit;
+  }
+  .tut-close:active{color:#fff}
+  .tut-body{
+    flex:1 1 auto;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:16px 4px;gap:14px;
+  }
+  .tut-icon{
+    font-size:64px;line-height:1;
+    filter:drop-shadow(0 6px 18px rgba(180,120,255,.55));
+  }
+  .tut-title{
+    font-size:24px;letter-spacing:2px;font-weight:900;color:#fff;
+    margin:0;line-height:1.2;
+  }
+  .tut-text{
+    font-size:15px;line-height:1.6;color:#b8c2dc;margin:0;
+    max-width:320px;
+  }
+  .tut-text b{color:#fff;font-weight:800}
+  .tut-text .gold{color:#ffd66b}
+  .tut-text .purple{color:#d8b0ff}
+  .tut-text .crimson{color:#ff8aa6}
+  .tut-text .blue{color:#7cc0ff}
+  .tut-dots{
+    display:flex;justify-content:center;gap:8px;
+    padding:12px 0 8px;
+  }
+  .tut-dot{
+    width:8px;height:8px;border-radius:50%;
+    background:#3a2a6a;
+    transition:background .2s ease, transform .2s ease;
+  }
+  .tut-dot.active{
+    background:#c88bff;transform:scale(1.35);
+  }
+  .tut-nav{
+    display:flex;gap:10px;
+  }
+  .tut-btn{
+    flex:1 1 0;
+    padding:14px 18px;
+    border-radius:14px;
+    border:0;
+    font-family:inherit;
+    font-weight:900;font-size:15px;letter-spacing:1px;
+    cursor:pointer;
+    transition:transform .06s ease, box-shadow .06s ease;
+  }
+  .tut-btn-prev{
+    background:rgba(255,255,255,.06);
+    color:#b8c2dc;
+    border:1px solid rgba(255,255,255,.1);
+  }
+  .tut-btn-prev:disabled{opacity:.35;cursor:default}
+  .tut-btn-prev:active:not(:disabled){transform:translateY(2px)}
+  .tut-btn-next{
+    background:linear-gradient(to bottom,#ffd66b,#f0a83a);
+    color:#3a2400;
+    box-shadow:0 4px 0 #a06f18;
+  }
+  .tut-btn-next:active{
+    transform:translateY(3px);
+    box-shadow:0 1px 0 #a06f18;
+  }
 </style>
 </head>
 <body>
@@ -198,6 +309,27 @@
     </div>
   </div>
 </div>
+
+<!-- Гайд (страницы правил) -->
+<div id="tutorial">
+  <div class="tut-card">
+    <div class="tut-header">
+      <span id="tutStep">Шаг 1 из 4</span>
+      <button class="tut-close" id="tutClose" type="button">✕</button>
+    </div>
+    <div class="tut-body">
+      <div class="tut-icon" id="tutIcon">🎯</div>
+      <h2 class="tut-title" id="tutTitle">Как играть</h2>
+      <p class="tut-text" id="tutText"></p>
+    </div>
+    <div class="tut-dots" id="tutDots"></div>
+    <div class="tut-nav">
+      <button class="tut-btn tut-btn-prev" id="tutPrev" type="button">← Назад</button>
+      <button class="tut-btn tut-btn-next" id="tutNext" type="button">Далее →</button>
+    </div>
+  </div>
+</div>
+
 <script src="dictionary.js"></script>
 <script src="game.js"></script>
 </body>
