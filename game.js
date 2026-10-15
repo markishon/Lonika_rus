@@ -1,6 +1,8 @@
 /* =====================================================================
-   ЛОНИКА — движок v20
-   + сокращены буквы Е, И, Я на 20%
+   ЛОНИКА — движок v21
+   + белая вспышка слов при GO (500 мс)
+   + Е, Я, все гласные и Г — сокращены
+   + очки +10% через комбо (1.32 / 0.396 / 3.96)
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -23,6 +25,7 @@ window.onerror = function(msg, url, line, col){
     SPAWN_COL: 5,
     BASE_INTERVAL: 1872,
     LOCK_DELAY_MS: 1000,
+    FLASH_DURATION_MS: 500,
     SPEED_FACTOR: 1.1,
     MAX_SPEED_LEVEL: 20,
     MIN_WORD_LEN: 3,
@@ -31,9 +34,10 @@ window.onerror = function(msg, url, line, col){
     LEVEL_STEP: 10000,
     LEVELUP_PAUSE_MS: 3500,
 
-    COMBO_STEP: 0.36,
-    COMBO_MAX:  3.6,
-    COMBO_BASE: 1.2,
+    /* Комбо: +10% от прошлого значения */
+    COMBO_STEP: 0.396,
+    COMBO_MAX:  3.96,
+    COMBO_BASE: 1.32,
 
     COMPLEX_MIN_FRAC: 0.01,
     COMPLEX_MAX_FRAC: 0.10,
@@ -53,14 +57,14 @@ window.onerror = function(msg, url, line, col){
       'Тритон','Церера','Веста','Паллада','Юнона','Гигея','Эрида','Макемаке','Хаумеа','Селена'
     ],
 
-    /* Е, И, Я — сокращены на 20% */
+    /* Гласные и Е, Я, Г — сокращены. Согласные без изменений. */
     LETTER_WEIGHTS: {
-      'а':1100,'е':640, 'о':800,'и':560, 'н':600,'т':500,
-      'у':375,'я':300, 'б':375,'в':375,'г':375,'д':375,
-      'к':375,'л':375,'м':375,'п':375,'р':375,'с':375,
-      'ы':87,'э':87,'ю':87,'з':87,
-      'й':86,'ф':86,'х':86,'ц':86,'ч':86,'ш':86,'щ':86,
-      'ь':45,'ъ':5
+      'а':990, 'е':518, 'о':720, 'и':504, 'н':600, 'т':500,
+      'у':338, 'я':243, 'б':375, 'в':375, 'г':338, 'д':375,
+      'к':375, 'л':375, 'м':375, 'п':375, 'р':375, 'с':375,
+      'ы':78,  'э':78,  'ю':78,  'з':87,
+      'й':86,  'ф':86,  'х':86,  'ц':86,  'ч':86,  'ш':86,  'щ':86,
+      'ь':45,  'ъ':5
     },
 
     SIMPLE_LETTERS: ['а','е','о','и','н','т','у','я','б','в','г','д','к','л','м','п','р','с'],
@@ -491,18 +495,29 @@ window.onerror = function(msg, url, line, col){
       ctx.translate(-ox, -oy);
     }
 
+    // тень
     ctx.fillStyle = pal.shadow;
     roundRect(x + pad, y + pad + shadowH, s, s, r);
     ctx.fill();
 
+    // плитка
     ctx.fillStyle = pal.fill;
     roundRect(x + pad, y + pad, s, s, r);
     ctx.fill();
 
+    // белая вспышка поверх плитки (до буквы)
+    if (opts.flash){
+      ctx.fillStyle = 'rgba(255,255,255,' + (opts.flash * 0.92) + ')';
+      roundRect(x + pad, y + pad, s, s, r);
+      ctx.fill();
+    }
+
+    // обводка
     ctx.strokeStyle = pal.edge;
     ctx.lineWidth = 1;
     ctx.stroke();
 
+    // буква
     ctx.fillStyle = pal.letter;
     ctx.font = '800 ' + (cellSize * 0.54) + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -539,6 +554,15 @@ window.onerror = function(msg, url, line, col){
 
     var now = performance.now();
 
+    /* ---- Фаза белой вспышки ---- */
+    var flashAlpha = 0;
+    if (G.phase && G.phase.type === 'flash'){
+      var ft = (now - G.phase.start) / G.phase.dur;
+      if (ft >= 1) flashAlpha = 0;
+      else flashAlpha = Math.sin(ft * Math.PI);
+    }
+
+    /* ---- Фаза удаления ---- */
     var delSet = null;
     if (G.phase && G.phase.type === 'delete'){
       delSet = Object.create(null);
@@ -547,6 +571,8 @@ window.onerror = function(msg, url, line, col){
         delSet[G.deleting[dI].r*N + G.deleting[dI].c] = dt1;
       }
     }
+
+    /* ---- Фаза падения ---- */
     var fallMap = null;
     if (G.phase && G.phase.type === 'fall'){
       fallMap = Object.create(null);
@@ -574,6 +600,10 @@ window.onerror = function(msg, url, line, col){
           highlight: !!mark,
           tier: mark || letterBonus(cell.letter)
         };
+        // вспышка только на подсвеченных клетках
+        if (mark && flashAlpha > 0){
+          opts.flash = flashAlpha;
+        }
         if (delT != null){
           opts.alpha = 1 - delT;
           opts.scale = 1 - delT * 0.35;
@@ -748,11 +778,11 @@ window.onerror = function(msg, url, line, col){
       title: 'Комбо',
       text:
         'Чем больше слов удалишь за одно нажатие GO — тем выше множитель:<br><br>' +
-        '1 слово — <b>×1.2</b><br>' +
-        '2 слова — <b>×1.56</b><br>' +
-        '3 слова — <b>×1.92</b><br>' +
-        '5 слов — <b>×2.64</b><br>' +
-        '8+ слов — <b>×3.6</b> (максимум)<br><br>' +
+        '1 слово — <b>×1.32</b><br>' +
+        '2 слова — <b>×1.72</b><br>' +
+        '3 слова — <b>×2.11</b><br>' +
+        '5 слов — <b>×2.90</b><br>' +
+        '8+ слов — <b>×3.96</b> (максимум)<br><br>' +
         'Собирай буквы заранее и удаляй сразу много слов — это самый быстрый путь к победе.'
     },
     {
@@ -962,15 +992,16 @@ window.onerror = function(msg, url, line, col){
     var combo = comboMultiplier(words.length);
     var comboTag = combo > 1 ? ' ×' + combo.toFixed(2) + ' комбо' : '';
     if (maxBonus >= 10){
-      toast('БОНУС ×' + maxBonus + comboTag + '  +' + gain, 1500, '#ff8aa6');
+      toast('БОНУС ×' + maxBonus + comboTag + '  +' + gain, 1800, '#ff8aa6');
     } else if (maxBonus >= 5){
-      toast('БОНУС ×' + maxBonus + comboTag + '  +' + gain, 1400, '#d8b0ff');
+      toast('БОНУС ×' + maxBonus + comboTag + '  +' + gain, 1700, '#d8b0ff');
     } else if (combo > 1){
-      toast('КОМБО ×' + combo.toFixed(2) + '  +' + gain, 1100, '#ffd66b');
+      toast('КОМБО ×' + combo.toFixed(2) + '  +' + gain, 1400, '#ffd66b');
     } else {
-      toast('+' + gain, 900, '#ffd66b');
+      toast('+' + gain, 1200, '#ffd66b');
     }
 
+    // Собираем клетки
     var cellSet = Object.create(null);
     for (var i=0;i<words.length;i++){
       var cs = words[i].cells;
@@ -985,40 +1016,49 @@ window.onerror = function(msg, url, line, col){
     }
     G.highlight = words;
     G.busy = true;
-    G.phase = { type: 'delete', start: performance.now(), dur: 155 };
+
+    /* === ФАЗА 1: Белая вспышка 500 мс === */
+    G.phase = { type: 'flash', start: performance.now(), dur: CONFIG.FLASH_DURATION_MS };
 
     setTimeout(function(){
-      Audio8.score();
-      for (var i=0;i<keys.length;i++){
-        var kk = +keys[i];
-        var r = Math.floor(kk/N), c = kk%N;
-        board[r][c] = null;
-      }
-      var oldLv = G.level;
-      G.score = G.score + gain;
-      var newLv = levelForScore(G.score);
-      if (newLv > CONFIG.MAX_LEVEL) newLv = CONFIG.MAX_LEVEL;
-      updateUI();
-
-      var leveledUp = newLv > oldLv;
-      if (leveledUp){
-        G.level = newLv;
-        Audio8.levelup();
-        updateUI();
-        var delta = speedDeltaPercent(oldLv, newLv);
-        showLevelUp(newLv, delta);
-      }
-
-      G.fallMoves = applyGravity();
-      G.phase = { type: 'fall', start: performance.now(), dur: 170 };
-      var releaseDelay = 170 + (leveledUp ? CONFIG.LEVELUP_PAUSE_MS : 0);
+      /* === ФАЗА 2: Удаление 155 мс === */
+      G.phase = { type: 'delete', start: performance.now(), dur: 155 };
 
       setTimeout(function(){
-        G.phase = null; G.fallMoves = []; G.deleting = [];
-        G.busy = false; refreshHighlight();
-        if (G.level >= CONFIG.MAX_LEVEL) victory();
-      }, releaseDelay);
-    }, 155);
+        Audio8.score();
+        // Удаляем клетки
+        for (var i=0;i<keys.length;i++){
+          var kk = +keys[i];
+          var r = Math.floor(kk/N), c = kk%N;
+          board[r][c] = null;
+        }
+        var oldLv = G.level;
+        G.score = G.score + gain;
+        var newLv = levelForScore(G.score);
+        if (newLv > CONFIG.MAX_LEVEL) newLv = CONFIG.MAX_LEVEL;
+        updateUI();
+
+        var leveledUp = newLv > oldLv;
+        if (leveledUp){
+          G.level = newLv;
+          Audio8.levelup();
+          updateUI();
+          var delta = speedDeltaPercent(oldLv, newLv);
+          showLevelUp(newLv, delta);
+        }
+
+        /* === ФАЗА 3: Падение === */
+        G.fallMoves = applyGravity();
+        G.phase = { type: 'fall', start: performance.now(), dur: 170 };
+        var releaseDelay = 170 + (leveledUp ? CONFIG.LEVELUP_PAUSE_MS : 0);
+
+        setTimeout(function(){
+          G.phase = null; G.fallMoves = []; G.deleting = [];
+          G.busy = false; refreshHighlight();
+          if (G.level >= CONFIG.MAX_LEVEL) victory();
+        }, releaseDelay);
+      }, 155);
+    }, CONFIG.FLASH_DURATION_MS);
   }
   function applyGravity(){
     var moves = [];
