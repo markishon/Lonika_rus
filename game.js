@@ -1,8 +1,6 @@
 /* =====================================================================
-   ЛОНИКА — движок v19
-   + гайд из 4 страниц перед началом игры
-   + чистый титульный экран (только название и кнопка)
-   + остальное: комбо +20%, LOCK_DELAY 1с, оптимизация canvas
+   ЛОНИКА — движок v20
+   + сокращены буквы Е, И, Я на 20%
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -55,9 +53,10 @@ window.onerror = function(msg, url, line, col){
       'Тритон','Церера','Веста','Паллада','Юнона','Гигея','Эрида','Макемаке','Хаумеа','Селена'
     ],
 
+    /* Е, И, Я — сокращены на 20% */
     LETTER_WEIGHTS: {
-      'а':1100,'е':800,'о':800,'и':700,'н':600,'т':500,
-      'у':375,'я':375,'б':375,'в':375,'г':375,'д':375,
+      'а':1100,'е':640, 'о':800,'и':560, 'н':600,'т':500,
+      'у':375,'я':300, 'б':375,'в':375,'г':375,'д':375,
       'к':375,'л':375,'м':375,'п':375,'р':375,'с':375,
       'ы':87,'э':87,'ю':87,'з':87,
       'й':86,'ф':86,'х':86,'ц':86,'ч':86,'ш':86,'щ':86,
@@ -710,7 +709,6 @@ window.onerror = function(msg, url, line, col){
     el.overlay.innerHTML = '';
   }
 
-  /* ---------- ТИТУЛЬНЫЙ ЭКРАН ---------- */
   function showTitleScreen(){
     showOverlay(
       '<div style="display:flex;flex-direction:column;align-items:center;gap:36px">' +
@@ -725,7 +723,6 @@ window.onerror = function(msg, url, line, col){
     document.getElementById('titleGuide').onclick = function(){ openTutorial(); };
   }
 
-  /* ---------- ГАЙД ---------- */
   var TUTORIAL_PAGES = [
     {
       icon: '🎯',
@@ -787,14 +784,12 @@ window.onerror = function(msg, url, line, col){
     tutTitleEl.textContent = page.title;
     tutTextEl.innerHTML = page.text;
 
-    // точки
     var dotsHtml = '';
     for (var i=0;i<TUTORIAL_PAGES.length;i++){
       dotsHtml += '<div class="tut-dot' + (i === tutIndex ? ' active' : '') + '"></div>';
     }
     tutDotsEl.innerHTML = dotsHtml;
 
-    // кнопки
     tutPrevBtn.disabled = (tutIndex === 0);
     if (tutIndex === TUTORIAL_PAGES.length - 1){
       tutNextBtn.textContent = 'ИГРАТЬ';
@@ -825,7 +820,6 @@ window.onerror = function(msg, url, line, col){
       tutIndex++;
       renderTutorial();
     } else {
-      // последняя страница — начать игру
       closeTutorial();
       hideOverlay();
       startGame();
@@ -840,7 +834,6 @@ window.onerror = function(msg, url, line, col){
   tutNextBtn.addEventListener('click', tutNext);
   tutCloseBtn.addEventListener('click', tutClose);
 
-  /* ---------- Логика игры ---------- */
   var levelupEl = null;
   var levelupTimer1 = null;
   var levelupTimer2 = null;
@@ -1098,7 +1091,6 @@ window.onerror = function(msg, url, line, col){
   var keys = { down: false };
 
   document.addEventListener('keydown', function(e){
-    // Если открыт гайд — стрелки управляют страницами
     if (tutorialEl.classList.contains('on')){
       if (e.key === 'ArrowLeft'){ tutPrev(); e.preventDefault(); return; }
       if (e.key === 'ArrowRight'){ tutNext(); e.preventDefault(); return; }
