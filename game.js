@@ -1,8 +1,7 @@
 /* =====================================================================
-   ЛОНИКА — движок v21
-   + белая вспышка слов при GO (500 мс)
-   + Е, Я, все гласные и Г — сокращены
-   + очки +10% через комбо (1.32 / 0.396 / 3.96)
+   ЛОНИКА — движок v22
+   + вспышка новых слов при фиксации (и после GO-осыпания)
+   + с титульного экрана убрана кнопка "Как играть"
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -26,6 +25,7 @@ window.onerror = function(msg, url, line, col){
     BASE_INTERVAL: 1872,
     LOCK_DELAY_MS: 1000,
     FLASH_DURATION_MS: 500,
+    NEW_WORD_DURATION_MS: 1300,
     SPEED_FACTOR: 1.1,
     MAX_SPEED_LEVEL: 20,
     MIN_WORD_LEN: 3,
@@ -34,7 +34,6 @@ window.onerror = function(msg, url, line, col){
     LEVEL_STEP: 10000,
     LEVELUP_PAUSE_MS: 3500,
 
-    /* Комбо: +10% от прошлого значения */
     COMBO_STEP: 0.396,
     COMBO_MAX:  3.96,
     COMBO_BASE: 1.32,
@@ -57,7 +56,6 @@ window.onerror = function(msg, url, line, col){
       'Тритон','Церера','Веста','Паллада','Юнона','Гигея','Эрида','Макемаке','Хаумеа','Селена'
     ],
 
-    /* Гласные и Е, Я, Г — сокращены. Согласные без изменений. */
     LETTER_WEIGHTS: {
       'а':990, 'е':518, 'о':720, 'и':504, 'н':600, 'т':500,
       'у':338, 'я':243, 'б':375, 'в':375, 'г':338, 'д':375,
@@ -313,6 +311,35 @@ window.onerror = function(msg, url, line, col){
     return true;
   }
 
+  /* Уникальный ключ слова для сравнения "было / стало" */
+  function wordKey(w){
+    var s = '';
+    for (var i=0;i<w.cells.length;i++){
+      s += w.cells[i][0] + ',' + w.cells[i][1] + '|';
+    }
+    return s + w.word;
+  }
+
+  /* Возвращает карту клеток (Object) для слов, которых не было в oldHl. */
+  function collectNewWordCells(oldHl, newHl){
+    var oldKeys = Object.create(null);
+    for (var i=0;i<oldHl.length;i++){
+      oldKeys[wordKey(oldHl[i])] = 1;
+    }
+    var cells = Object.create(null);
+    var count = 0;
+    for (var i=0;i<newHl.length;i++){
+      var w = newHl[i];
+      if (!oldKeys[wordKey(w)]){
+        for (var j=0;j<w.cells.length;j++){
+          cells[w.cells[j][0]*N + w.cells[j][1]] = 1;
+          count++;
+        }
+      }
+    }
+    return count > 0 ? cells : null;
+  }
+
   function comboMultiplier(n){
     if (n <= 0) return 1;
     var m = CONFIG.COMBO_BASE + CONFIG.COMBO_STEP * (n - 1);
@@ -384,6 +411,10 @@ window.onerror = function(msg, url, line, col){
       move:  function(){ beep(440, 0.04, 'square', 0.04); },
       lock:  function(){ beep(220, 0.07, 'triangle', 0.06); },
       go:    function(){ beep(520, 0.09, 'square', 0.08); },
+      newWord: function(){
+        beep(1050, 0.08, 'sine', 0.09);
+        setTimeout(function(){ beep(1400, 0.10, 'sine', 0.10); }, 70);
+      },
       score: function(){ beep(880, 0.06, 'sine', 0.07); setTimeout(function(){ beep(1180,0.07,'sine',0.07); }, 60); },
       bonus: function(){
         beep(880, 0.07, 'sine', 0.09);
@@ -421,7 +452,8 @@ window.onerror = function(msg, url, line, col){
   var G = {
     state: 'READY', score: 0, level: 1, piece: null, queue: [],
     highlight: [], busy: false, phase: null, fallMoves: [], deleting: [],
-    lockFx: null, goFx: null, pulseT: 0
+    lockFx: null, goFx: null, pulseT: 0,
+    newWordsFx: []
   };
 
   var canvas = document.getElementById('board');
@@ -495,30 +527,44 @@ window.onerror = function(msg, url, line, col){
       ctx.translate(-ox, -oy);
     }
 
-    // тень
+    // 1. тень
     ctx.fillStyle = pal.shadow;
     roundRect(x + pad, y + pad + shadowH, s, s, r);
     ctx.fill();
 
-    // плитка
+    // 2. плитка
     ctx.fillStyle = pal.fill;
     roundRect(x + pad, y + pad, s, s, r);
     ctx.fill();
 
-    // белая вспышка поверх плитки (до буквы)
+    // 3. вспышка от GO
     if (opts.flash){
       ctx.fillStyle = 'rgba(255,255,255,' + (opts.flash * 0.92) + ')';
       roundRect(x + pad, y + pad, s, s, r);
       ctx.fill();
     }
 
-    // обводка
+    // 4. обводка
     ctx.strokeStyle = pal.edge;
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // буква
-    ctx.fillStyle = pal.letter;
+    // 5. подсветка нового слова — тёплое свечение
+    var nw = opts.newWord || 0;
+    if (nw > 0){
+      ctx.fillStyle = 'rgba(255,240,180,' + (nw * 0.55) + ')';
+      roundRect(x + pad, y + pad, s, s, r);
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(255,255,255,' + (nw * 0.95) + ')';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+
+    // 6. буква
+    var letterColor = pal.letter;
+    if (nw > 0.25) letterColor = '#2A1400';
+    ctx.fillStyle = letterColor;
     ctx.font = '800 ' + (cellSize * 0.54) + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(letter, x + cellSize/2, y + cellSize/2 + 1);
@@ -554,7 +600,24 @@ window.onerror = function(msg, url, line, col){
 
     var now = performance.now();
 
-    /* ---- Фаза белой вспышки ---- */
+    /* ---- подсветка новых слов ---- */
+    var newWordAlpha = Object.create(null);
+    if (G.newWordsFx.length > 0){
+      for (var nwI = G.newWordsFx.length - 1; nwI >= 0; nwI--){
+        var fx = G.newWordsFx[nwI];
+        var nwt = (now - fx.start) / fx.dur;
+        if (nwt >= 1){
+          G.newWordsFx.splice(nwI, 1);
+          continue;
+        }
+        var a = Math.pow(1 - nwt, 1.5);
+        for (var k in fx.cells){
+          if (!newWordAlpha[k] || newWordAlpha[k] < a) newWordAlpha[k] = a;
+        }
+      }
+    }
+
+    /* ---- белая вспышка от GO ---- */
     var flashAlpha = 0;
     if (G.phase && G.phase.type === 'flash'){
       var ft = (now - G.phase.start) / G.phase.dur;
@@ -562,7 +625,7 @@ window.onerror = function(msg, url, line, col){
       else flashAlpha = Math.sin(ft * Math.PI);
     }
 
-    /* ---- Фаза удаления ---- */
+    /* ---- удаление ---- */
     var delSet = null;
     if (G.phase && G.phase.type === 'delete'){
       delSet = Object.create(null);
@@ -572,7 +635,7 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    /* ---- Фаза падения ---- */
+    /* ---- падение ---- */
     var fallMap = null;
     if (G.phase && G.phase.type === 'fall'){
       fallMap = Object.create(null);
@@ -596,14 +659,14 @@ window.onerror = function(msg, url, line, col){
         }
         var delT = delSet ? delSet[r*N + c] : null;
         var mark = hl[r*N + c];
+        var nwA = newWordAlpha[r*N + c] || 0;
+
         var opts = {
           highlight: !!mark,
           tier: mark || letterBonus(cell.letter)
         };
-        // вспышка только на подсвеченных клетках
-        if (mark && flashAlpha > 0){
-          opts.flash = flashAlpha;
-        }
+        if (mark && flashAlpha > 0) opts.flash = flashAlpha;
+        if (nwA > 0) opts.newWord = nwA;
         if (delT != null){
           opts.alpha = 1 - delT;
           opts.scale = 1 - delT * 0.35;
@@ -642,8 +705,8 @@ window.onerror = function(msg, url, line, col){
       if (ltf >= 1){
         G.lockFx = null;
       } else {
-        var a = 1 - ltf;
-        ctx.strokeStyle = 'rgba(255,255,255,' + (a * 0.8) + ')';
+        var aL = 1 - ltf;
+        ctx.strokeStyle = 'rgba(255,255,255,' + (aL * 0.8) + ')';
         ctx.lineWidth = 2;
         var lx = G.lockFx.c * cellSize;
         var ly = G.lockFx.r * cellSize;
@@ -739,18 +802,15 @@ window.onerror = function(msg, url, line, col){
     el.overlay.innerHTML = '';
   }
 
+  /* === Титульный экран: только название и одна кнопка === */
   function showTitleScreen(){
     showOverlay(
-      '<div style="display:flex;flex-direction:column;align-items:center;gap:36px">' +
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:44px">' +
         '<h1 class="title-big">ЛОНИКА</h1>' +
-        '<div style="display:flex;flex-direction:column;align-items:center;gap:6px">' +
-          '<button id="titlePlay" type="button">ИГРАТЬ</button>' +
-          '<button class="link" id="titleGuide" type="button">Как играть</button>' +
-        '</div>' +
+        '<button id="titlePlay" type="button">ИГРАТЬ</button>' +
       '</div>'
     );
     document.getElementById('titlePlay').onclick = function(){ openTutorial(); };
-    document.getElementById('titleGuide').onclick = function(){ openTutorial(); };
   }
 
   var TUTORIAL_PAGES = [
@@ -761,7 +821,8 @@ window.onerror = function(msg, url, line, col){
         'Буквы падают сверху по одной. Двигай их <b>←</b> и <b>→</b>, ' +
         'ускоряй <b>↓</b>. Составляй слова по горизонтали, вертикали или диагонали.<br><br>' +
         '<b>Слова НЕ удаляются сами.</b> Когда готов — нажми <b class="gold">GO</b>, ' +
-        'и все найденные слова разом исчезнут, а буквы осыпятся вниз.'
+        'и все найденные слова разом исчезнут, а буквы осыпятся вниз.<br><br>' +
+        'Новое слово вспыхнет ярким светом в момент появления — так ты сразу поймёшь, что собрал.'
     },
     {
       icon: '💰',
@@ -930,6 +991,7 @@ window.onerror = function(msg, url, line, col){
     G.highlight = []; G.busy = false; G.phase = null;
     G.deleting = []; G.fallMoves = [];
     G.lockFx = null; G.goFx = null;
+    G.newWordsFx = [];
     G.state = 'PLAYING';
     updateUI(); updatePreviews();
     hideOverlay();
@@ -947,11 +1009,27 @@ window.onerror = function(msg, url, line, col){
   }
   function lockPiece(){
     var p = G.piece;
+    var oldHl = G.highlight;
+
     board[p.row][p.col] = { letter: p.letter, id: nextCellId++ };
-    G.lockFx = { r: p.row, c: p.col, start: performance.now() };
     G.piece = null;
     Audio8.lock();
+
     refreshHighlight();
+
+    var newCells = collectNewWordCells(oldHl, G.highlight);
+    if (newCells){
+      G.newWordsFx.push({
+        cells: newCells,
+        start: performance.now(),
+        dur: CONFIG.NEW_WORD_DURATION_MS
+      });
+      Audio8.newWord();
+    } else {
+      // если нового слова нет — обычная вспышка фиксации
+      G.lockFx = { r: p.row, c: p.col, start: performance.now() };
+    }
+
     spawnPiece();
   }
   function refreshHighlight(){ G.highlight = findWords(G.level); }
@@ -979,6 +1057,8 @@ window.onerror = function(msg, url, line, col){
     var words = findWords(G.level);
     if (words.length === 0){ toast('НЕТ СЛОВ'); return; }
 
+    var oldHlBeforeGO = G.highlight;
+
     Audio8.go();
     G.goFx = performance.now();
     var gain = scoreWords(words);
@@ -1001,7 +1081,6 @@ window.onerror = function(msg, url, line, col){
       toast('+' + gain, 1200, '#ffd66b');
     }
 
-    // Собираем клетки
     var cellSet = Object.create(null);
     for (var i=0;i<words.length;i++){
       var cs = words[i].cells;
@@ -1017,16 +1096,13 @@ window.onerror = function(msg, url, line, col){
     G.highlight = words;
     G.busy = true;
 
-    /* === ФАЗА 1: Белая вспышка 500 мс === */
     G.phase = { type: 'flash', start: performance.now(), dur: CONFIG.FLASH_DURATION_MS };
 
     setTimeout(function(){
-      /* === ФАЗА 2: Удаление 155 мс === */
       G.phase = { type: 'delete', start: performance.now(), dur: 155 };
 
       setTimeout(function(){
         Audio8.score();
-        // Удаляем клетки
         for (var i=0;i<keys.length;i++){
           var kk = +keys[i];
           var r = Math.floor(kk/N), c = kk%N;
@@ -1047,14 +1123,27 @@ window.onerror = function(msg, url, line, col){
           showLevelUp(newLv, delta);
         }
 
-        /* === ФАЗА 3: Падение === */
         G.fallMoves = applyGravity();
         G.phase = { type: 'fall', start: performance.now(), dur: 170 };
         var releaseDelay = 170 + (leveledUp ? CONFIG.LEVELUP_PAUSE_MS : 0);
 
         setTimeout(function(){
           G.phase = null; G.fallMoves = []; G.deleting = [];
-          G.busy = false; refreshHighlight();
+
+          // обновляем подсветку и ищем новые слова, появившиеся после осыпания
+          var oldHlBeforeRefresh = G.highlight;
+          refreshHighlight();
+          var newAfterFall = collectNewWordCells(oldHlBeforeRefresh, G.highlight);
+          if (newAfterFall){
+            G.newWordsFx.push({
+              cells: newAfterFall,
+              start: performance.now(),
+              dur: CONFIG.NEW_WORD_DURATION_MS
+            });
+            Audio8.newWord();
+          }
+
+          G.busy = false;
           if (G.level >= CONFIG.MAX_LEVEL) victory();
         }, releaseDelay);
       }, 155);
