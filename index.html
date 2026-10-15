@@ -127,6 +127,14 @@
     .key{width:62px;height:62px;font-size:24px}
     .key.go{font-size:18px}
   }
+
+  /* === Скрытие интерфейса на титульном экране и в гайде === */
+  body.in-menu header,
+  body.in-menu #previews,
+  body.in-menu #controls{
+    display:none !important;
+  }
+
   #overlay{
     position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
     justify-content:center;background:rgba(8,6,24,.94);border-radius:18px;
@@ -226,7 +234,7 @@
     margin:0;
     font-size:58px;
     letter-spacing:12px;
-    padding-left:12px; /* компенсация letter-spacing справа */
+    padding-left:12px;
     font-weight:900;
     line-height:1;
     background:linear-gradient(90deg,#7cc0ff 0%,#c88bff 50%,#ff9ec0 100%);
@@ -291,7 +299,7 @@
     to  { opacity:1; transform:translateY(0) scale(1); }
   }
 
-  /* ============ ГАЙД (страницы правил) ============ */
+  /* ============ ГАЙД ============ */
   #tutorial{
     position:fixed;inset:0;z-index:200;display:none;
     align-items:center;justify-content:center;
