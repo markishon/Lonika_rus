@@ -1,9 +1,6 @@
 /* =====================================================================
-   ЛОНИКА — движок v17 (оптимизированный)
-   + убраны canvas-градиенты (было 121 объект на кадр)
-   + убран shadowBlur (самая дорогая операция canvas)
-   + ограничение FPS = 40
-   + LOCK_DELAY_MS = 1000, сложные буквы по уровням — без изменений
+   ЛОНИКА — движок v18
+   + комбо +20%: COMBO_STEP = 0.36, COMBO_MAX = 3.6
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -34,8 +31,10 @@ window.onerror = function(msg, url, line, col){
     LEVEL_STEP: 10000,
     LEVELUP_PAUSE_MS: 3500,
 
-    COMBO_STEP: 0.3,
-    COMBO_MAX:  3.0,
+    /* Комбо +20%: было 0.3/3.0, стало 0.36/3.6 */
+    COMBO_STEP: 0.36,
+    COMBO_MAX:  3.6,
+    COMBO_BASE: 1.2,
 
     COMPLEX_MIN_FRAC: 0.01,
     COMPLEX_MAX_FRAC: 0.10,
@@ -310,9 +309,18 @@ window.onerror = function(msg, url, line, col){
     return true;
   }
 
+  /* Новое комбо:
+     1 слово → 1.2
+     2 слова → 1.56
+     3 слова → 1.92
+     4 слова → 2.28
+     5 слов → 2.64
+     6 слов → 3.00
+     7 слов → 3.36
+     8+ слов → 3.6 (потолок) */
   function comboMultiplier(n){
-    if (n <= 1) return 1;
-    var m = 1 + CONFIG.COMBO_STEP * (n - 1);
+    if (n <= 0) return 1;
+    var m = CONFIG.COMBO_BASE + CONFIG.COMBO_STEP * (n - 1);
     return Math.min(CONFIG.COMBO_MAX, m);
   }
   function scoreWords(words){
@@ -456,7 +464,6 @@ window.onerror = function(msg, url, line, col){
     ctx.closePath();
   }
 
-  /* Сплошные цвета вместо градиентов. Палитра на каждый случай. */
   function tilePalette(tier, mode){
     if (mode === 'highlight'){
       return { fill:'#F5B93C', shadow:'#8F5608', edge:'#C67D18', letter:'#3A2400' };
@@ -493,22 +500,18 @@ window.onerror = function(msg, url, line, col){
       ctx.translate(-ox, -oy);
     }
 
-    // тень-основание
     ctx.fillStyle = pal.shadow;
     roundRect(x + pad, y + pad + shadowH, s, s, r);
     ctx.fill();
 
-    // плитка
     ctx.fillStyle = pal.fill;
     roundRect(x + pad, y + pad, s, s, r);
     ctx.fill();
 
-    // обводка
     ctx.strokeStyle = pal.edge;
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // буква
     ctx.fillStyle = pal.letter;
     ctx.font = '800 ' + (cellSize * 0.54) + 'px -apple-system, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -517,11 +520,9 @@ window.onerror = function(msg, url, line, col){
   }
 
   function render(){
-    // фон поля
     ctx.fillStyle = '#0e1428';
     ctx.fillRect(0, 0, boardPx, boardPx);
 
-    // пустые клетки
     var pad = cellSize * 0.07;
     var s = cellSize - pad * 2;
     var r = s * 0.22;
@@ -534,7 +535,6 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // карта подсветки
     var hl = Object.create(null);
     for (var hi=0; hi<G.highlight.length; hi++){
       var hw = G.highlight[hi];
@@ -548,7 +548,6 @@ window.onerror = function(msg, url, line, col){
 
     var now = performance.now();
 
-    // удаление
     var delSet = null;
     if (G.phase && G.phase.type === 'delete'){
       delSet = Object.create(null);
@@ -557,7 +556,6 @@ window.onerror = function(msg, url, line, col){
         delSet[G.deleting[dI].r*N + G.deleting[dI].c] = dt1;
       }
     }
-    // падение
     var fallMap = null;
     if (G.phase && G.phase.type === 'fall'){
       fallMap = Object.create(null);
@@ -569,7 +567,6 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // зафиксированные буквы
     for (var r=0;r<N;r++){
       for (var c=0;c<N;c++){
         var cell = board[r][c];
@@ -594,7 +591,6 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // падающая буква
     if (G.piece && (G.state === 'PLAYING') && !G.busy){
       var p = G.piece;
       var spawnT = 1;
@@ -620,7 +616,6 @@ window.onerror = function(msg, url, line, col){
       });
     }
 
-    // вспышка при фиксации — тонкая рамка вместо радиального градиента
     if (G.lockFx){
       var ltf = (now - G.lockFx.start) / 350;
       if (ltf >= 1){
@@ -636,7 +631,6 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    // вспышка при GO
     if (G.goFx){
       var gt = (now - G.goFx) / 400;
       if (gt >= 1){
@@ -850,13 +844,13 @@ window.onerror = function(msg, url, line, col){
     else if (maxBonus >= 5) Audio8.bonus();
 
     var combo = comboMultiplier(words.length);
-    var comboTag = combo > 1 ? ' ×' + combo.toFixed(1) + ' комбо' : '';
+    var comboTag = combo > 1 ? ' ×' + combo.toFixed(2) + ' комбо' : '';
     if (maxBonus >= 10){
       toast('БОНУС ×' + maxBonus + comboTag + '  +' + gain, 1500, '#ff8aa6');
     } else if (maxBonus >= 5){
       toast('БОНУС ×' + maxBonus + comboTag + '  +' + gain, 1400, '#d8b0ff');
     } else if (combo > 1){
-      toast('КОМБО ×' + combo.toFixed(1) + '  +' + gain, 1100, '#ffd66b');
+      toast('КОМБО ×' + combo.toFixed(2) + '  +' + gain, 1100, '#ffd66b');
     } else {
       toast('+' + gain, 900, '#ffd66b');
     }
@@ -1075,8 +1069,6 @@ window.onerror = function(msg, url, line, col){
     }
   }
 
-  /* Ограничение FPS: физика и логика считаются на каждом кадре,
-     а canvas перерисовывается не чаще 40 раз в секунду. */
   var lastRenderTs = 0;
   var renderInterval = 1000 / CONFIG.RENDER_FPS;
 
