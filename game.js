@@ -1,7 +1,7 @@
 /* =====================================================================
-   ЛОНИКА — движок v22
-   + вспышка новых слов при фиксации (и после GO-осыпания)
-   + с титульного экрана убрана кнопка "Как играть"
+   ЛОНИКА — движок v23
+   + титульный экран: только ЛОНИКА + кнопка ИГРАТЬ
+   + дизайн: свечение, две орбиты с планетами, плавные анимации
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -311,7 +311,6 @@ window.onerror = function(msg, url, line, col){
     return true;
   }
 
-  /* Уникальный ключ слова для сравнения "было / стало" */
   function wordKey(w){
     var s = '';
     for (var i=0;i<w.cells.length;i++){
@@ -319,13 +318,9 @@ window.onerror = function(msg, url, line, col){
     }
     return s + w.word;
   }
-
-  /* Возвращает карту клеток (Object) для слов, которых не было в oldHl. */
   function collectNewWordCells(oldHl, newHl){
     var oldKeys = Object.create(null);
-    for (var i=0;i<oldHl.length;i++){
-      oldKeys[wordKey(oldHl[i])] = 1;
-    }
+    for (var i=0;i<oldHl.length;i++) oldKeys[wordKey(oldHl[i])] = 1;
     var cells = Object.create(null);
     var count = 0;
     for (var i=0;i<newHl.length;i++){
@@ -527,29 +522,24 @@ window.onerror = function(msg, url, line, col){
       ctx.translate(-ox, -oy);
     }
 
-    // 1. тень
     ctx.fillStyle = pal.shadow;
     roundRect(x + pad, y + pad + shadowH, s, s, r);
     ctx.fill();
 
-    // 2. плитка
     ctx.fillStyle = pal.fill;
     roundRect(x + pad, y + pad, s, s, r);
     ctx.fill();
 
-    // 3. вспышка от GO
     if (opts.flash){
       ctx.fillStyle = 'rgba(255,255,255,' + (opts.flash * 0.92) + ')';
       roundRect(x + pad, y + pad, s, s, r);
       ctx.fill();
     }
 
-    // 4. обводка
     ctx.strokeStyle = pal.edge;
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // 5. подсветка нового слова — тёплое свечение
     var nw = opts.newWord || 0;
     if (nw > 0){
       ctx.fillStyle = 'rgba(255,240,180,' + (nw * 0.55) + ')';
@@ -561,7 +551,6 @@ window.onerror = function(msg, url, line, col){
       ctx.stroke();
     }
 
-    // 6. буква
     var letterColor = pal.letter;
     if (nw > 0.25) letterColor = '#2A1400';
     ctx.fillStyle = letterColor;
@@ -600,7 +589,6 @@ window.onerror = function(msg, url, line, col){
 
     var now = performance.now();
 
-    /* ---- подсветка новых слов ---- */
     var newWordAlpha = Object.create(null);
     if (G.newWordsFx.length > 0){
       for (var nwI = G.newWordsFx.length - 1; nwI >= 0; nwI--){
@@ -617,7 +605,6 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    /* ---- белая вспышка от GO ---- */
     var flashAlpha = 0;
     if (G.phase && G.phase.type === 'flash'){
       var ft = (now - G.phase.start) / G.phase.dur;
@@ -625,7 +612,6 @@ window.onerror = function(msg, url, line, col){
       else flashAlpha = Math.sin(ft * Math.PI);
     }
 
-    /* ---- удаление ---- */
     var delSet = null;
     if (G.phase && G.phase.type === 'delete'){
       delSet = Object.create(null);
@@ -635,7 +621,6 @@ window.onerror = function(msg, url, line, col){
       }
     }
 
-    /* ---- падение ---- */
     var fallMap = null;
     if (G.phase && G.phase.type === 'fall'){
       fallMap = Object.create(null);
@@ -802,12 +787,17 @@ window.onerror = function(msg, url, line, col){
     el.overlay.innerHTML = '';
   }
 
-  /* === Титульный экран: только название и одна кнопка === */
+  /* === Титульный экран — только ЛОНИКА + ИГРАТЬ === */
   function showTitleScreen(){
     showOverlay(
-      '<div style="display:flex;flex-direction:column;align-items:center;gap:44px">' +
-        '<h1 class="title-big">ЛОНИКА</h1>' +
-        '<button id="titlePlay" type="button">ИГРАТЬ</button>' +
+      '<div class="title-screen">' +
+        '<div class="title-logo-wrap">' +
+          '<div class="title-logo-glow"></div>' +
+          '<div class="title-orbit"></div>' +
+          '<div class="title-orbit-inner"></div>' +
+          '<h1 class="title-logo">ЛОНИКА</h1>' +
+        '</div>' +
+        '<button class="title-play" id="titlePlay" type="button">ИГРАТЬ</button>' +
       '</div>'
     );
     document.getElementById('titlePlay').onclick = function(){ openTutorial(); };
@@ -1026,7 +1016,6 @@ window.onerror = function(msg, url, line, col){
       });
       Audio8.newWord();
     } else {
-      // если нового слова нет — обычная вспышка фиксации
       G.lockFx = { r: p.row, c: p.col, start: performance.now() };
     }
 
@@ -1056,8 +1045,6 @@ window.onerror = function(msg, url, line, col){
     if (G.state !== 'PLAYING' || G.busy) return;
     var words = findWords(G.level);
     if (words.length === 0){ toast('НЕТ СЛОВ'); return; }
-
-    var oldHlBeforeGO = G.highlight;
 
     Audio8.go();
     G.goFx = performance.now();
@@ -1130,7 +1117,6 @@ window.onerror = function(msg, url, line, col){
         setTimeout(function(){
           G.phase = null; G.fallMoves = []; G.deleting = [];
 
-          // обновляем подсветку и ищем новые слова, появившиеся после осыпания
           var oldHlBeforeRefresh = G.highlight;
           refreshHighlight();
           var newAfterFall = collectNewWordCells(oldHlBeforeRefresh, G.highlight);
