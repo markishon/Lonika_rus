@@ -1,6 +1,8 @@
 /* =====================================================================
-   ЛОНИКА — движок v18
-   + комбо +20%: COMBO_STEP = 0.36, COMBO_MAX = 3.6
+   ЛОНИКА — движок v19
+   + гайд из 4 страниц перед началом игры
+   + чистый титульный экран (только название и кнопка)
+   + остальное: комбо +20%, LOCK_DELAY 1с, оптимизация canvas
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -31,7 +33,6 @@ window.onerror = function(msg, url, line, col){
     LEVEL_STEP: 10000,
     LEVELUP_PAUSE_MS: 3500,
 
-    /* Комбо +20%: было 0.3/3.0, стало 0.36/3.6 */
     COMBO_STEP: 0.36,
     COMBO_MAX:  3.6,
     COMBO_BASE: 1.2,
@@ -309,15 +310,6 @@ window.onerror = function(msg, url, line, col){
     return true;
   }
 
-  /* Новое комбо:
-     1 слово → 1.2
-     2 слова → 1.56
-     3 слова → 1.92
-     4 слова → 2.28
-     5 слов → 2.64
-     6 слов → 3.00
-     7 слов → 3.36
-     8+ слов → 3.6 (потолок) */
   function comboMultiplier(n){
     if (n <= 0) return 1;
     var m = CONFIG.COMBO_BASE + CONFIG.COMBO_STEP * (n - 1);
@@ -718,6 +710,137 @@ window.onerror = function(msg, url, line, col){
     el.overlay.innerHTML = '';
   }
 
+  /* ---------- ТИТУЛЬНЫЙ ЭКРАН ---------- */
+  function showTitleScreen(){
+    showOverlay(
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:36px">' +
+        '<h1 class="title-big">ЛОНИКА</h1>' +
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:6px">' +
+          '<button id="titlePlay" type="button">ИГРАТЬ</button>' +
+          '<button class="link" id="titleGuide" type="button">Как играть</button>' +
+        '</div>' +
+      '</div>'
+    );
+    document.getElementById('titlePlay').onclick = function(){ openTutorial(); };
+    document.getElementById('titleGuide').onclick = function(){ openTutorial(); };
+  }
+
+  /* ---------- ГАЙД ---------- */
+  var TUTORIAL_PAGES = [
+    {
+      icon: '🎯',
+      title: 'Как играть',
+      text:
+        'Буквы падают сверху по одной. Двигай их <b>←</b> и <b>→</b>, ' +
+        'ускоряй <b>↓</b>. Составляй слова по горизонтали, вертикали или диагонали.<br><br>' +
+        '<b>Слова НЕ удаляются сами.</b> Когда готов — нажми <b class="gold">GO</b>, ' +
+        'и все найденные слова разом исчезнут, а буквы осыпятся вниз.'
+    },
+    {
+      icon: '💰',
+      title: 'Очки',
+      text:
+        'Формула: <b>длина² × 10 × бонус буквы × комбо</b>.<br><br>' +
+        '<b class="blue">Синие</b> буквы — обычные, ×1.<br>' +
+        '<b class="purple">Фиолетовые</b> (<b>ы э ю з й ф х ц ч ш щ</b>) — ×5.<br>' +
+        '<b class="crimson">Малиновые</b> (<b>ь ъ</b>) — ×10.<br><br>' +
+        'Если слово содержит редкую букву — очки за него умножаются на её бонус.'
+    },
+    {
+      icon: '🔥',
+      title: 'Комбо',
+      text:
+        'Чем больше слов удалишь за одно нажатие GO — тем выше множитель:<br><br>' +
+        '1 слово — <b>×1.2</b><br>' +
+        '2 слова — <b>×1.56</b><br>' +
+        '3 слова — <b>×1.92</b><br>' +
+        '5 слов — <b>×2.64</b><br>' +
+        '8+ слов — <b>×3.6</b> (максимум)<br><br>' +
+        'Собирай буквы заранее и удаляй сразу много слов — это самый быстрый путь к победе.'
+    },
+    {
+      icon: '🪐',
+      title: '30 планет',
+      text:
+        'Каждые <b>10 000 очков</b> — новый уровень. Каждый уровень — новая планета:<br>' +
+        'от <b>Меркурия</b> до <b>Селены</b>.<br><br>' +
+        'С каждым уровнем буквы падают быстрее, а редких букв становится больше. ' +
+        'Победа — на 30-м уровне, планета <b class="purple">Селена</b>.'
+    }
+  ];
+
+  var tutorialEl = document.getElementById('tutorial');
+  var tutStepEl = document.getElementById('tutStep');
+  var tutIconEl = document.getElementById('tutIcon');
+  var tutTitleEl = document.getElementById('tutTitle');
+  var tutTextEl = document.getElementById('tutText');
+  var tutDotsEl = document.getElementById('tutDots');
+  var tutPrevBtn = document.getElementById('tutPrev');
+  var tutNextBtn = document.getElementById('tutNext');
+  var tutCloseBtn = document.getElementById('tutClose');
+  var tutIndex = 0;
+
+  function renderTutorial(){
+    var page = TUTORIAL_PAGES[tutIndex];
+    tutStepEl.textContent = 'Шаг ' + (tutIndex + 1) + ' из ' + TUTORIAL_PAGES.length;
+    tutIconEl.textContent = page.icon;
+    tutTitleEl.textContent = page.title;
+    tutTextEl.innerHTML = page.text;
+
+    // точки
+    var dotsHtml = '';
+    for (var i=0;i<TUTORIAL_PAGES.length;i++){
+      dotsHtml += '<div class="tut-dot' + (i === tutIndex ? ' active' : '') + '"></div>';
+    }
+    tutDotsEl.innerHTML = dotsHtml;
+
+    // кнопки
+    tutPrevBtn.disabled = (tutIndex === 0);
+    if (tutIndex === TUTORIAL_PAGES.length - 1){
+      tutNextBtn.textContent = 'ИГРАТЬ';
+      tutNextBtn.style.background = 'linear-gradient(to bottom,#c88bff,#7c2ecc)';
+      tutNextBtn.style.color = '#fff';
+      tutNextBtn.style.boxShadow = '0 4px 0 #4f108f';
+    } else {
+      tutNextBtn.textContent = 'Далее →';
+      tutNextBtn.style.background = 'linear-gradient(to bottom,#ffd66b,#f0a83a)';
+      tutNextBtn.style.color = '#3a2400';
+      tutNextBtn.style.boxShadow = '0 4px 0 #a06f18';
+    }
+  }
+
+  function openTutorial(){
+    tutIndex = 0;
+    renderTutorial();
+    tutorialEl.classList.add('on');
+  }
+  function closeTutorial(){
+    tutorialEl.classList.remove('on');
+  }
+  function tutPrev(){
+    if (tutIndex > 0){ tutIndex--; renderTutorial(); }
+  }
+  function tutNext(){
+    if (tutIndex < TUTORIAL_PAGES.length - 1){
+      tutIndex++;
+      renderTutorial();
+    } else {
+      // последняя страница — начать игру
+      closeTutorial();
+      hideOverlay();
+      startGame();
+    }
+  }
+  function tutClose(){
+    closeTutorial();
+    showTitleScreen();
+  }
+
+  tutPrevBtn.addEventListener('click', tutPrev);
+  tutNextBtn.addEventListener('click', tutNext);
+  tutCloseBtn.addEventListener('click', tutClose);
+
+  /* ---------- Логика игры ---------- */
   var levelupEl = null;
   var levelupTimer1 = null;
   var levelupTimer2 = null;
@@ -975,6 +1098,13 @@ window.onerror = function(msg, url, line, col){
   var keys = { down: false };
 
   document.addEventListener('keydown', function(e){
+    // Если открыт гайд — стрелки управляют страницами
+    if (tutorialEl.classList.contains('on')){
+      if (e.key === 'ArrowLeft'){ tutPrev(); e.preventDefault(); return; }
+      if (e.key === 'ArrowRight'){ tutNext(); e.preventDefault(); return; }
+      if (e.key === 'Escape'){ tutClose(); e.preventDefault(); return; }
+      return;
+    }
     if (e.key === 'Enter'){
       e.preventDefault();
       e.stopPropagation();
@@ -1001,7 +1131,7 @@ window.onerror = function(msg, url, line, col){
       btn.addEventListener('pointerdown', function(e){
         e.preventDefault();
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-        if (G.state === 'READY'){ startGame(); return; }
+        if (G.state === 'READY'){ return; }
         if (G.state !== 'PLAYING') return;
         if (act === 'left')  moveHorizontal(-1);
         if (act === 'right') moveHorizontal(1);
@@ -1026,7 +1156,7 @@ window.onerror = function(msg, url, line, col){
   }
 
   canvas.addEventListener('pointerdown', function(e){
-    if (G.state === 'READY'){ startGame(); return; }
+    if (G.state === 'READY'){ return; }
     if (e.pointerType === 'touch' && (G.state === 'PLAYING' || G.state === 'PAUSED')) togglePause();
   });
 
@@ -1089,20 +1219,7 @@ window.onerror = function(msg, url, line, col){
 
   function boot(){
     newBoard(); resize(); updateUI();
-    var count = DICT_RAW.length;
-    showOverlay(
-      '<h1>ЛОНИКА</h1>' +
-      '<p style="margin-top:10px">Собирай слова из падающих букв.<br>Слова НЕ удаляются сами — нажми <b style="color:#ffd66b">GO</b>, когда готов.</p>' +
-      '<div style="margin-top:16px;display:flex;gap:14px;font-size:12px;color:#b8c2dc;flex-wrap:wrap;justify-content:center">' +
-        '<span><b style="color:#5DA8FF">●</b> синие — обычные</span>' +
-        '<span><b style="color:#B44CFF">●</b> фиолетовые ×5</span>' +
-        '<span><b style="color:#FF3E7F">●</b> малиновые ×10</span>' +
-      '</div>' +
-      '<p style="font-size:12px;color:#7a86a8;margin-top:14px">← → двигать · ↓ ускорить · Enter = GO · Space = пауза</p>' +
-      '<p style="font-size:11px;color:#5a6b8f;margin-top:6px">30 планет · Победа на Селене · Словарь: ' + count + ' слов</p>' +
-      '<button id="startBtn">ИГРАТЬ</button>'
-    );
-    document.getElementById('startBtn').onclick = startGame;
+    showTitleScreen();
     requestAnimationFrame(loop);
   }
 
