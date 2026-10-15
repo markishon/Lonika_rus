@@ -1,7 +1,7 @@
 /* =====================================================================
-   ЛОНИКА — движок v23
-   + титульный экран: только ЛОНИКА + кнопка ИГРАТЬ
-   + дизайн: свечение, две орбиты с планетами, плавные анимации
+   ЛОНИКА — движок v24
+   + каскадная подсветка новых слов (по направлению чтения)
+   + скрытие интерфейса на титульном экране и в гайде
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -25,7 +25,8 @@ window.onerror = function(msg, url, line, col){
     BASE_INTERVAL: 1872,
     LOCK_DELAY_MS: 1000,
     FLASH_DURATION_MS: 500,
-    NEW_WORD_DURATION_MS: 1300,
+    NEW_WORD_FADE_MS: 900,
+    NEW_WORD_STEP_MS: 90,
     SPEED_FACTOR: 1.1,
     MAX_SPEED_LEVEL: 20,
     MIN_WORD_LEN: 3,
@@ -318,21 +319,16 @@ window.onerror = function(msg, url, line, col){
     }
     return s + w.word;
   }
-  function collectNewWordCells(oldHl, newHl){
+  /* Возвращает массив клеток для каждого нового слова (порядок = порядок чтения) */
+  function collectNewWords(oldHl, newHl){
     var oldKeys = Object.create(null);
     for (var i=0;i<oldHl.length;i++) oldKeys[wordKey(oldHl[i])] = 1;
-    var cells = Object.create(null);
-    var count = 0;
+    var result = [];
     for (var i=0;i<newHl.length;i++){
       var w = newHl[i];
-      if (!oldKeys[wordKey(w)]){
-        for (var j=0;j<w.cells.length;j++){
-          cells[w.cells[j][0]*N + w.cells[j][1]] = 1;
-          count++;
-        }
-      }
+      if (!oldKeys[wordKey(w)]) result.push(w.cells);
     }
-    return count > 0 ? cells : null;
+    return result.length > 0 ? result : null;
   }
 
   function comboMultiplier(n){
@@ -460,6 +456,7 @@ window.onerror = function(msg, url, line, col){
     var controlsEl = document.getElementById('controls');
     var previewsEl = document.getElementById('previews');
     var headerEl = document.querySelector('header');
+    // если элемент скрыт через display:none — offsetHeight будет 0, что нам и нужно
     var controlsH = controlsEl ? controlsEl.offsetHeight : 80;
     var previewsH = previewsEl ? previewsEl.offsetHeight : 50;
     var headerH = headerEl ? headerEl.offsetHeight : 60;
@@ -475,6 +472,13 @@ window.onerror = function(msg, url, line, col){
     cellSize = boardPx / N;
   }
   window.addEventListener('resize', resize);
+
+  /* === Меню-режим: скрывает header/previews/controls === */
+  function setMenuMode(on){
+    if (on) document.body.classList.add('in-menu');
+    else document.body.classList.remove('in-menu');
+    requestAnimationFrame(function(){ resize(); });
+  }
 
   function roundRect(x, y, w, h, r){
     ctx.beginPath();
@@ -542,12 +546,20 @@ window.onerror = function(msg, url, line, col){
 
     var nw = opts.newWord || 0;
     if (nw > 0){
-      ctx.fillStyle = 'rgba(255,240,180,' + (nw * 0.55) + ')';
+      // заливка тёплым светом
+      ctx.fillStyle = 'rgba(255,240,180,' + (nw * 0.75) + ')';
       roundRect(x + pad, y + pad, s, s, r);
       ctx.fill();
 
+      // белая обводка
       ctx.strokeStyle = 'rgba(255,255,255,' + (nw * 0.95) + ')';
       ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      // внешнее золотое свечение (без shadowBlur — рисуем расширенную рамку)
+      ctx.strokeStyle = 'rgba(255,220,140,' + (nw * 0.55) + ')';
+      ctx.lineWidth = 5;
+      roundRect(x + pad - 2, y + pad - 2, s + 4, s + 4, r + 2);
       ctx.stroke();
     }
 
@@ -589,19 +601,28 @@ window.onerror = function(msg, url, line, col){
 
     var now = performance.now();
 
+    /* ==== каскадная подсветка новых слов ==== */
     var newWordAlpha = Object.create(null);
     if (G.newWordsFx.length > 0){
       for (var nwI = G.newWordsFx.length - 1; nwI >= 0; nwI--){
         var fx = G.newWordsFx[nwI];
-        var nwt = (now - fx.start) / fx.dur;
-        if (nwt >= 1){
-          G.newWordsFx.splice(nwI, 1);
-          continue;
+        var expired = true;
+        for (var wi = 0; wi < fx.words.length; wi++){
+          var cells = fx.words[wi];
+          for (var ci = 0; ci < cells.length; ci++){
+            var cellStart = fx.start + ci * fx.step;
+            var elapsed = now - cellStart;
+            if (elapsed < 0){ expired = false; continue; }
+            var t = elapsed / fx.fade;
+            if (t < 1){
+              expired = false;
+              var a = Math.pow(1 - t, 1.5);
+              var kk = cells[ci][0]*N + cells[ci][1];
+              if (!newWordAlpha[kk] || newWordAlpha[kk] < a) newWordAlpha[kk] = a;
+            }
+          }
         }
-        var a = Math.pow(1 - nwt, 1.5);
-        for (var k in fx.cells){
-          if (!newWordAlpha[k] || newWordAlpha[k] < a) newWordAlpha[k] = a;
-        }
+        if (expired) G.newWordsFx.splice(nwI, 1);
       }
     }
 
@@ -787,8 +808,8 @@ window.onerror = function(msg, url, line, col){
     el.overlay.innerHTML = '';
   }
 
-  /* === Титульный экран — только ЛОНИКА + ИГРАТЬ === */
   function showTitleScreen(){
+    setMenuMode(true);
     showOverlay(
       '<div class="title-screen">' +
         '<div class="title-logo-wrap">' +
@@ -812,7 +833,8 @@ window.onerror = function(msg, url, line, col){
         'ускоряй <b>↓</b>. Составляй слова по горизонтали, вертикали или диагонали.<br><br>' +
         '<b>Слова НЕ удаляются сами.</b> Когда готов — нажми <b class="gold">GO</b>, ' +
         'и все найденные слова разом исчезнут, а буквы осыпятся вниз.<br><br>' +
-        'Новое слово вспыхнет ярким светом в момент появления — так ты сразу поймёшь, что собрал.'
+        'Новое слово вспыхнет <b>каскадом</b> — свет пробегает по буквам ' +
+        'в направлении чтения, чтобы было понятно, куда читается слово.'
     },
     {
       icon: '💰',
@@ -886,6 +908,7 @@ window.onerror = function(msg, url, line, col){
   }
 
   function openTutorial(){
+    setMenuMode(true);
     tutIndex = 0;
     renderTutorial();
     tutorialEl.classList.add('on');
@@ -974,6 +997,7 @@ window.onerror = function(msg, url, line, col){
   });
 
   function startGame(){
+    setMenuMode(false);
     newBoard();
     G.score = 0; G.level = 1; G.piece = null;
     typeHistory = [];
@@ -1007,12 +1031,13 @@ window.onerror = function(msg, url, line, col){
 
     refreshHighlight();
 
-    var newCells = collectNewWordCells(oldHl, G.highlight);
-    if (newCells){
+    var newWords = collectNewWords(oldHl, G.highlight);
+    if (newWords){
       G.newWordsFx.push({
-        cells: newCells,
+        words: newWords,
         start: performance.now(),
-        dur: CONFIG.NEW_WORD_DURATION_MS
+        fade: CONFIG.NEW_WORD_FADE_MS,
+        step: CONFIG.NEW_WORD_STEP_MS
       });
       Audio8.newWord();
     } else {
@@ -1119,12 +1144,13 @@ window.onerror = function(msg, url, line, col){
 
           var oldHlBeforeRefresh = G.highlight;
           refreshHighlight();
-          var newAfterFall = collectNewWordCells(oldHlBeforeRefresh, G.highlight);
+          var newAfterFall = collectNewWords(oldHlBeforeRefresh, G.highlight);
           if (newAfterFall){
             G.newWordsFx.push({
-              cells: newAfterFall,
+              words: newAfterFall,
               start: performance.now(),
-              dur: CONFIG.NEW_WORD_DURATION_MS
+              fade: CONFIG.NEW_WORD_FADE_MS,
+              step: CONFIG.NEW_WORD_STEP_MS
             });
             Audio8.newWord();
           }
