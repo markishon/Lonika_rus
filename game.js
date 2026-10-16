@@ -1,6 +1,7 @@
 /* =====================================================================
-   ЛОНИКА — движок v27
-   + укороченный гайд (4 страницы, минимум текста)
+   ЛОНИКА — движок v28
+   + рекорд под очками
+   + кнопка "Пропустить" в гайде
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -737,15 +738,27 @@ window.onerror = function(msg, url, line, col){
   }
 
   var el = {
-    score:   document.getElementById('score'),
-    level:   document.getElementById('level'),
-    planet:  document.getElementById('planet'),
-    dirs:    document.getElementById('dirs'),
-    pv0:     document.getElementById('pv0'),
-    pv1:     document.getElementById('pv1'),
-    overlay: document.getElementById('overlay'),
-    toast:   document.getElementById('toast')
+    score:     document.getElementById('score'),
+    bestScore: document.getElementById('bestScore'),
+    level:     document.getElementById('level'),
+    planet:    document.getElementById('planet'),
+    dirs:      document.getElementById('dirs'),
+    pv0:       document.getElementById('pv0'),
+    pv1:       document.getElementById('pv1'),
+    overlay:   document.getElementById('overlay'),
+    toast:     document.getElementById('toast')
   };
+
+  function readBest(){
+    var best = 0;
+    try { best = parseInt(localStorage.getItem('lonika_best') || '0', 10) || 0; } catch(e){}
+    return best;
+  }
+  function refreshBest(){
+    if (!el.bestScore) return;
+    var best = readBest();
+    el.bestScore.textContent = best > 0 ? ('★ ' + best.toLocaleString('ru-RU')) : '★ —';
+  }
 
   var DIR_SYMBOL = {
     right:'→', left:'←', up:'↑', down:'↓',
@@ -828,7 +841,6 @@ window.onerror = function(msg, url, line, col){
     document.getElementById('titlePlay').onclick = function(){ openTutorial(); };
   }
 
-  /* ============ ГАЙД (короткий) ============ */
   var TUTORIAL_PAGES = [
     {
       icon: '🎯',
@@ -877,6 +889,7 @@ window.onerror = function(msg, url, line, col){
   var tutPrevBtn = document.getElementById('tutPrev');
   var tutNextBtn = document.getElementById('tutNext');
   var tutCloseBtn = document.getElementById('tutClose');
+  var tutSkipBtn = document.getElementById('tutSkip');
   var tutIndex = 0;
 
   function renderTutorial(){
@@ -928,6 +941,11 @@ window.onerror = function(msg, url, line, col){
       startGame();
     }
   }
+  function tutSkip(){
+    closeTutorial();
+    hideOverlay();
+    startGame();
+  }
   function tutClose(){
     closeTutorial();
     showTitleScreen();
@@ -936,6 +954,7 @@ window.onerror = function(msg, url, line, col){
   tutPrevBtn.addEventListener('click', tutPrev);
   tutNextBtn.addEventListener('click', tutNext);
   tutCloseBtn.addEventListener('click', tutClose);
+  if (tutSkipBtn) tutSkipBtn.addEventListener('click', tutSkip);
 
   var levelupEl = null;
   var levelupTimer1 = null;
@@ -1179,11 +1198,11 @@ window.onerror = function(msg, url, line, col){
   }
   function gameOver(){
     G.state = 'GAMEOVER'; Audio8.gameover();
-    var best = 0;
-    try { best = parseInt(localStorage.getItem('lonika_best') || '0', 10) || 0; } catch(e){}
+    var best = readBest();
     var isRecord = G.score > best;
     if (isRecord){
       try { localStorage.setItem('lonika_best', String(G.score)); } catch(e){}
+      refreshBest();
     }
     var recordBadge = isRecord
       ? '<div style="display:inline-block;padding:6px 16px;border-radius:999px;' +
@@ -1206,6 +1225,11 @@ window.onerror = function(msg, url, line, col){
   }
   function victory(){
     G.state = 'VICTORY'; Audio8.victory();
+    var best = readBest();
+    if (G.score > best){
+      try { localStorage.setItem('lonika_best', String(G.score)); } catch(e){}
+      refreshBest();
+    }
     showOverlay(
       '<h1>ПОБЕДА!</h1>' +
       '<p style="margin-top:8px">Ты прошёл все 30 планет — от Меркурия до Селены!</p>' +
@@ -1353,6 +1377,7 @@ window.onerror = function(msg, url, line, col){
     newBoard();
     resize();
     updateUI();
+    refreshBest();
     showTitleScreen();
     requestAnimationFrame(function(){
       document.body.classList.remove('loading');
