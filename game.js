@@ -1,7 +1,6 @@
 /* =====================================================================
-   ЛОНИКА — движок v24
-   + каскадная подсветка новых слов (по направлению чтения)
-   + скрытие интерфейса на титульном экране и в гайде
+   ЛОНИКА — движок v25
+   + фикс начального мерцания: body.loading скрывает UI до boot()
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -319,7 +318,6 @@ window.onerror = function(msg, url, line, col){
     }
     return s + w.word;
   }
-  /* Возвращает массив клеток для каждого нового слова (порядок = порядок чтения) */
   function collectNewWords(oldHl, newHl){
     var oldKeys = Object.create(null);
     for (var i=0;i<oldHl.length;i++) oldKeys[wordKey(oldHl[i])] = 1;
@@ -456,7 +454,6 @@ window.onerror = function(msg, url, line, col){
     var controlsEl = document.getElementById('controls');
     var previewsEl = document.getElementById('previews');
     var headerEl = document.querySelector('header');
-    // если элемент скрыт через display:none — offsetHeight будет 0, что нам и нужно
     var controlsH = controlsEl ? controlsEl.offsetHeight : 80;
     var previewsH = previewsEl ? previewsEl.offsetHeight : 50;
     var headerH = headerEl ? headerEl.offsetHeight : 60;
@@ -473,7 +470,6 @@ window.onerror = function(msg, url, line, col){
   }
   window.addEventListener('resize', resize);
 
-  /* === Меню-режим: скрывает header/previews/controls === */
   function setMenuMode(on){
     if (on) document.body.classList.add('in-menu');
     else document.body.classList.remove('in-menu');
@@ -546,17 +542,14 @@ window.onerror = function(msg, url, line, col){
 
     var nw = opts.newWord || 0;
     if (nw > 0){
-      // заливка тёплым светом
       ctx.fillStyle = 'rgba(255,240,180,' + (nw * 0.75) + ')';
       roundRect(x + pad, y + pad, s, s, r);
       ctx.fill();
 
-      // белая обводка
       ctx.strokeStyle = 'rgba(255,255,255,' + (nw * 0.95) + ')';
       ctx.lineWidth = 2.5;
       ctx.stroke();
 
-      // внешнее золотое свечение (без shadowBlur — рисуем расширенную рамку)
       ctx.strokeStyle = 'rgba(255,220,140,' + (nw * 0.55) + ')';
       ctx.lineWidth = 5;
       roundRect(x + pad - 2, y + pad - 2, s + 4, s + 4, r + 2);
@@ -601,7 +594,6 @@ window.onerror = function(msg, url, line, col){
 
     var now = performance.now();
 
-    /* ==== каскадная подсветка новых слов ==== */
     var newWordAlpha = Object.create(null);
     if (G.newWordsFx.length > 0){
       for (var nwI = G.newWordsFx.length - 1; nwI >= 0; nwI--){
@@ -1351,8 +1343,16 @@ window.onerror = function(msg, url, line, col){
   }, CONFIG.HIGHLIGHT_REFRESH_MS);
 
   function boot(){
-    newBoard(); resize(); updateUI();
+    newBoard();
+    resize();
+    updateUI();
     showTitleScreen();
+    // Убираем "loading" только на следующем кадре —
+    // к этому моменту титульный оверлей уже отрисован
+    requestAnimationFrame(function(){
+      document.body.classList.remove('loading');
+      resize();
+    });
     requestAnimationFrame(loop);
   }
 
