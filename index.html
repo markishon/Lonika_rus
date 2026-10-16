@@ -134,6 +134,12 @@
     display:none !important;
   }
 
+  /* Скрывает всё, пока игра не инициализирована */
+  body.loading #app,
+  body.loading #tutorial{
+    visibility:hidden;
+  }
+
   #overlay{
     position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
     justify-content:center;background:rgba(8,6,24,.94);border-radius:18px;
@@ -309,7 +315,6 @@
   .tut-card{
     width:100%;
     max-width:400px;
-    /* ФИКСИРОВАННАЯ ВЫСОТА — одинаковая на всех 4 страницах */
     height:min(580px, 90vh);
     background:linear-gradient(180deg,#1c1240 0%,#0f0726 100%);
     border:1.5px solid rgba(140,110,220,.4);
@@ -398,7 +403,7 @@
   }
 </style>
 </head>
-<body>
+<body class="loading">
 <div id="app">
   <header>
     <div class="stat">Счёт<b id="score">0</b></div>
