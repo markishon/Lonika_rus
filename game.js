@@ -1,6 +1,6 @@
 /* =====================================================================
-   ЛОНИКА — движок v25
-   + фикс начального мерцания: body.loading скрывает UI до boot()
+   ЛОНИКА — движок v27
+   + укороченный гайд (4 страницы, минимум текста)
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -41,6 +41,9 @@ window.onerror = function(msg, url, line, col){
     COMPLEX_MIN_FRAC: 0.01,
     COMPLEX_MAX_FRAC: 0.10,
     SIGNS_FRACTION:   0.05,
+
+    TILE_PAD_FRAC: 0.07,
+    TILE_RADIUS_FRAC: 0.22,
 
     DIR_GROUPS: [
       { max: 8,     dirs: ['right','left','up','down'] },
@@ -467,6 +470,15 @@ window.onerror = function(msg, url, line, col){
     canvas.height = Math.round(boardPx * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     cellSize = boardPx / N;
+
+    var pad = cellSize * CONFIG.TILE_PAD_FRAC;
+    var s   = cellSize - pad * 2;
+    var r   = s * CONFIG.TILE_RADIUS_FRAC;
+    var outerRadius = Math.round((pad + r) * 100) / 100;
+    canvas.style.borderRadius = outerRadius + 'px';
+
+    var ov = document.getElementById('overlay');
+    if (ov) ov.style.borderRadius = outerRadius + 'px';
   }
   window.addEventListener('resize', resize);
 
@@ -502,9 +514,9 @@ window.onerror = function(msg, url, line, col){
 
   function drawCell(x, y, letter, opts){
     opts = opts || {};
-    var pad = cellSize * 0.07;
+    var pad = cellSize * CONFIG.TILE_PAD_FRAC;
     var s = cellSize - pad * 2;
-    var r = s * 0.22;
+    var r = s * CONFIG.TILE_RADIUS_FRAC;
     var alpha = opts.alpha != null ? opts.alpha : 1;
     var scale = opts.scale != null ? opts.scale : 1;
     var ox = x + cellSize/2, oy = y + cellSize/2;
@@ -569,9 +581,9 @@ window.onerror = function(msg, url, line, col){
     ctx.fillStyle = '#0e1428';
     ctx.fillRect(0, 0, boardPx, boardPx);
 
-    var pad = cellSize * 0.07;
+    var pad = cellSize * CONFIG.TILE_PAD_FRAC;
     var s = cellSize - pad * 2;
-    var r = s * 0.22;
+    var r = s * CONFIG.TILE_RADIUS_FRAC;
     ctx.fillStyle = '#151a30';
     for (var rr0=0; rr0<N; rr0++){
       for (var cc0=0; cc0<N; cc0++){
@@ -816,48 +828,43 @@ window.onerror = function(msg, url, line, col){
     document.getElementById('titlePlay').onclick = function(){ openTutorial(); };
   }
 
+  /* ============ ГАЙД (короткий) ============ */
   var TUTORIAL_PAGES = [
     {
       icon: '🎯',
-      title: 'Как играть',
+      title: 'Собирай слова',
       text:
-        'Буквы падают сверху по одной. Двигай их <b>←</b> и <b>→</b>, ' +
-        'ускоряй <b>↓</b>. Составляй слова по горизонтали, вертикали или диагонали.<br><br>' +
-        '<b>Слова НЕ удаляются сами.</b> Когда готов — нажми <b class="gold">GO</b>, ' +
-        'и все найденные слова разом исчезнут, а буквы осыпятся вниз.<br><br>' +
-        'Новое слово вспыхнет <b>каскадом</b> — свет пробегает по буквам ' +
-        'в направлении чтения, чтобы было понятно, куда читается слово.'
+        'Буквы падают сверху.<br>' +
+        'Двигай <b>←</b> <b>→</b>, ускоряй <b>↓</b>.<br><br>' +
+        'Слова читаются в 8 направлениях.<br><br>' +
+        'Слова <b>НЕ</b> удаляются сами.<br>' +
+        'Готов — жми <b class="gold">GO</b>.'
     },
     {
       icon: '💰',
-      title: 'Очки',
+      title: 'Бонусы букв',
       text:
-        'Формула: <b>длина² × 10 × бонус буквы × комбо</b>.<br><br>' +
-        '<b class="blue">Синие</b> буквы — обычные, ×1.<br>' +
-        '<b class="purple">Фиолетовые</b> (<b>ы э ю з й ф х ц ч ш щ</b>) — ×5.<br>' +
-        '<b class="crimson">Малиновые</b> (<b>ь ъ</b>) — ×10.<br><br>' +
-        'Если слово содержит редкую букву — очки за него умножаются на её бонус.'
+        '<b class="blue">Обычные</b> — ×1<br>' +
+        '<b class="purple">ы э ю з й ф х ц ч ш щ</b> — ×5<br>' +
+        '<b class="crimson">ь ъ</b> — ×10<br><br>' +
+        'Формула:<br>' +
+        '<b>длина² × 10 × бонус × комбо</b>'
     },
     {
       icon: '🔥',
       title: 'Комбо',
       text:
-        'Чем больше слов удалишь за одно нажатие GO — тем выше множитель:<br><br>' +
-        '1 слово — <b>×1.32</b><br>' +
-        '2 слова — <b>×1.72</b><br>' +
-        '3 слова — <b>×2.11</b><br>' +
-        '5 слов — <b>×2.90</b><br>' +
-        '8+ слов — <b>×3.96</b> (максимум)<br><br>' +
-        'Собирай буквы заранее и удаляй сразу много слов — это самый быстрый путь к победе.'
+        'Больше слов за один GO — выше множитель:<br><br>' +
+        '1 — <b>×1.32</b> &nbsp; 3 — <b>×2.11</b><br>' +
+        '2 — <b>×1.72</b> &nbsp; 8+ — <b>×3.96</b>'
     },
     {
       icon: '🪐',
       title: '30 планет',
       text:
-        'Каждые <b>10 000 очков</b> — новый уровень. Каждый уровень — новая планета:<br>' +
-        'от <b>Меркурия</b> до <b>Селены</b>.<br><br>' +
-        'С каждым уровнем буквы падают быстрее, а редких букв становится больше. ' +
-        'Победа — на 30-м уровне, планета <b class="purple">Селена</b>.'
+        'Каждые <b>10 000</b> очков — новая планета.<br><br>' +
+        '<b>Меркурий → Селена</b><br><br>' +
+        'Победа — на 30-м уровне.'
     }
   ];
 
@@ -1347,8 +1354,6 @@ window.onerror = function(msg, url, line, col){
     resize();
     updateUI();
     showTitleScreen();
-    // Убираем "loading" только на следующем кадре —
-    // к этому моменту титульный оверлей уже отрисован
     requestAnimationFrame(function(){
       document.body.classList.remove('loading');
       resize();
