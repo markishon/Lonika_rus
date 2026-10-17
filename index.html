@@ -56,11 +56,11 @@
     font-variant-numeric:tabular-nums;
     line-height:1.1;
   }
-  #bestScore{
-    font-size:11px;letter-spacing:2px;
-    color:#5a6b8f;margin-top:4px;
-    font-weight:800;text-transform:uppercase;
-    line-height:1;
+  .stat-sub{
+    margin-top:10px;
+    font-size:12px;letter-spacing:3px;
+    color:var(--text-muted);
+    text-transform:uppercase;font-weight:700;
   }
   .stat.right{align-items:flex-end}
   #planet{
@@ -185,7 +185,6 @@
   }
   #toast.on{opacity:1}
 
-  /* ============ ТИТУЛЬНЫЙ ЭКРАН ============ */
   .title-screen{
     display:flex;flex-direction:column;align-items:center;justify-content:center;
     width:100%;height:100%;
@@ -309,7 +308,6 @@
     to  { opacity:1; transform:translateY(0) scale(1); }
   }
 
-  /* ============ ГАЙД ============ */
   #tutorial{
     position:fixed;inset:0;z-index:200;display:none;
     align-items:center;justify-content:center;
@@ -422,11 +420,15 @@
 <body class="loading">
 <div id="app">
   <header>
-    <div class="stat">Счёт<b id="score">0</b>
-      <div id="bestScore">—</div>
+    <div class="stat">
+      Счёт
+      <b id="score">0</b>
+      <div class="stat-sub">Рекорд</div>
+      <b id="bestScore">—</b>
     </div>
     <div class="stat right">
-      Уровень<b id="level">1</b>
+      Уровень
+      <b id="level">1</b>
       <div id="planet">Меркурий</div>
       <div id="dirs"></div>
     </div>
