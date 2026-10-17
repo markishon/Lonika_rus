@@ -1,7 +1,6 @@
 /* =====================================================================
-   ЛОНИКА — движок v28
-   + рекорд под очками
-   + кнопка "Пропустить" в гайде
+   ЛОНИКА — движок v29
+   + "РЕКОРД" вместо звёздочки, число под ним
    ===================================================================== */
 
 window.onerror = function(msg, url, line, col){
@@ -757,7 +756,7 @@ window.onerror = function(msg, url, line, col){
   function refreshBest(){
     if (!el.bestScore) return;
     var best = readBest();
-    el.bestScore.textContent = best > 0 ? ('★ ' + best.toLocaleString('ru-RU')) : '★ —';
+    el.bestScore.textContent = best > 0 ? best.toLocaleString('ru-RU') : '—';
   }
 
   var DIR_SYMBOL = {
