@@ -28,7 +28,7 @@ window.onerror = function(msg, url, line, col){
     NEW_WORD_STEP_MS: 90,
     SPEED_FACTOR: 1.1,
     MAX_SPEED_LEVEL: 20,
-    MIN_WORD_LEN: 2,
+    MIN_WORD_LEN: 3,
     SCORE_MULT: 10,
     MAX_LEVEL: 30,
     LEVEL_STEP: 10000,
